@@ -25,6 +25,7 @@
 <script>
 'use strict';
 const lamps=[['NO PLAY','#526174'],['FAILED','#e77482'],['EASY','#69d8aa'],['CLEAR','#70c9ec'],['HARD','#f0c671'],['FC','#dab1ff'],['PERFECT','#ffffff']];
+const graphLampOrder=[6,5,4,3,2,1,0];
 const $=id=>document.getElementById(id);
 let data;
 const collator=new Intl.Collator('ja',{numeric:true});
@@ -45,13 +46,14 @@ function current(){return data.tables.find(t=>t.id===$('table').value)}
 function selectTable(){const t=current();$('level').replaceChildren(option('','すべて'),...Array.from(new Set(t.charts.map(c=>c.level))).sort(collator.compare).map(l=>option(l,t.symbol+l)));render()}
 function render(){const t=current();$('total').textContent=t.charts.length;$('cleared').textContent=t.charts.filter(c=>c.lamp>=2).length;$('hard').textContent=t.charts.filter(c=>c.lamp>=4).length;$('unplayed').textContent=t.charts.filter(c=>c.lamp===0).length;
  const levels=Array.from(new Set(t.charts.map(c=>c.level))).sort(collator.compare);$('graph').replaceChildren();
- for(const l of levels){const charts=t.charts.filter(c=>c.level===l);const row=node('div',undefined,'graphrow');row.append(node('span',t.symbol+l));const bar=node('div',undefined,'bar');const parts=[];lamps.forEach(([label,color],i)=>{const n=charts.filter(c=>c.lamp===i).length;if(!n)return;parts.push(`${label}: ${n}`);const seg=node('div',undefined,'segment');seg.style.width=`${n/charts.length*100}%`;seg.style.background=color;seg.title=`${label}: ${n}譜面`;bar.append(seg)});bar.setAttribute('role','img');bar.setAttribute('aria-label',`${t.symbol+l}: ${parts.join(', ')}`);row.append(bar,node('span',`${charts.filter(c=>c.lamp>=2).length}/${charts.length} EASY以上`));$('graph').append(row)}
+ for(const l of levels){const charts=t.charts.filter(c=>c.level===l);const row=node('div',undefined,'graphrow');row.append(node('span',t.symbol+l));const bar=node('div',undefined,'bar');const parts=[];graphLampOrder.forEach(i=>{const [label,color]=lamps[i];const n=charts.filter(c=>c.lamp===i).length;if(!n)return;parts.push(`${label}: ${n}`);const seg=node('div',undefined,'segment');seg.style.width=`${n/charts.length*100}%`;seg.style.background=color;seg.title=`${label}: ${n}譜面`;bar.append(seg)});bar.setAttribute('role','img');bar.setAttribute('aria-label',`${t.symbol+l}: ${parts.join(', ')}`);row.append(bar,node('span',`${charts.filter(c=>c.lamp>=2).length}/${charts.length} EASY以上`));$('graph').append(row)}
  const q=$('query').value.trim().toLocaleLowerCase('ja');let charts=t.charts.filter(c=>(!$('level').value||c.level===$('level').value)&&(!$('lamp').value||String(c.lamp)===$('lamp').value)&&c.title.toLocaleLowerCase('ja').includes(q));
  const byLevel=(a,b)=>collator.compare(a.level,b.level)||collator.compare(a.title,b.title);charts.sort((a,b)=>$('sort').value==='bp'?(a.minBp??Infinity)-(b.minBp??Infinity)||byLevel(a,b):$('sort').value==='lamp'?a.lamp-b.lamp||byLevel(a,b):$('sort').value==='title'?collator.compare(a.title,b.title):byLevel(a,b));$('count').textContent=`${charts.length} 譜面`;$('rows').replaceChildren();
  for(const c of charts){const row=node('tr');row.append(node('td',t.symbol+c.level),node('td',c.title,'title'));const td=node('td');const badge=node('span',lamps[c.lamp][0],'lamp');badge.style.background=lamps[c.lamp][1];td.append(badge);row.append(td,node('td',c.minBp===null?'—':c.minBp,'number'));$('rows').append(row)}
  if(!charts.length){const row=node('tr'),td=node('td','条件に一致する譜面がありません。','empty');td.colSpan=4;row.append(td);$('rows').append(row)}
 }
-lamps.forEach(([label,color],i)=>{$('lamp').append(option(String(i),label));const item=node('span');const dot=node('span',undefined,'dot');dot.style.background=color;item.append(dot,document.createTextNode(label));$('legend').append(item)});
+lamps.forEach(([label],i)=>$('lamp').append(option(String(i),label)));
+graphLampOrder.forEach(i=>{const [label,color]=lamps[i];const item=node('span');const dot=node('span',undefined,'dot');dot.style.background=color;item.append(dot,document.createTextNode(label));$('legend').append(item)});
 $('table').addEventListener('change',()=>{$('query').value='';$('lamp').value='';selectTable()});['level','lamp','sort'].forEach(id=>$(id).addEventListener('change',render));$('query').addEventListener('input',render);$('demo').addEventListener('click',()=>load(sample()));
 $('day').addEventListener('change',renderHistory);
 $('file').addEventListener('change',async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>25*1024*1024)throw Error('JSONは25MB以下にしてください。');load(JSON.parse(await file.text()))}catch(err){$('error').textContent=`読み込みエラー: ${err.message}`;$('error').hidden=false}finally{e.target.value=''}});
