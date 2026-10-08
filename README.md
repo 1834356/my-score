@@ -1,14 +1,17 @@
 # LR2 Score Viewer
 
-LR2のスコアDBを読み取り、Satelliteのランプ・最小BPと日々のプレイ記録をGitHub Pagesで閲覧する個人用ページです。
+LR2のスコアDBを読み取り、複数の難易度表のランプ・最小BPと日々のプレイ記録をGitHub Pagesで閲覧する個人用ページです。
 
-- 難易度表: https://stellabms.xyz/sl/table.html
+- Satellite: https://stellabms.xyz/sl/table.html
+- Stella: https://stellabms.xyz/st/table.html
+- Favorite: https://bms-ir.org/new/table/16
+- 発狂BMS難易度表: https://miraiscarlet.github.io/bms/table/genocide_insane/insane_bms.html
 - 閲覧ページ: https://1834356.github.io/lr2-score-viewer/
 - ソース: https://github.com/1834356/lr2-score-viewer
 
 ## 表示機能
 
-- Satelliteの全譜面を表示。MD5でLR2のスコアと照合。
+- 難易度表を切り替えて、それぞれの全譜面を表示。MD5でLR2のスコアと照合。
 - レベル別のランプ集計、EASY以上・HARD以上・未プレイの譜面数。
 - 曲名検索、レベル・ランプ絞り込み、BP・曲名・ランプ順のソート。
 - 日付別のプレイ数、判定数、演奏時間、ランプ更新・BP改善。
@@ -44,7 +47,7 @@ cd lr2-score-viewer
 Copy-Item config.example.json config.local.json
 ```
 
-`config.local.json` の `database` を使用中のLR2スコアDBのパスへ変更します。その後 `update.ps1 -Push` を実行してください。
+`config.local.json` の `database` を使用中のLR2スコアDBのパスへ変更します。`tableUrls` 配列に閲覧したい難易度表のURLを指定します。旧設定の `tableUrl`（単一URL）も引き続き使用できます。その後 `update.ps1 -Push` を実行してください。
 
 ## データと公開範囲
 
@@ -58,7 +61,7 @@ HTTP/HTTPSでは `data/viewer.json` を読み込みます。未配置なら明�
 
 既存の `bms_lr2_play_history` テーブルがある場合のみ読み込みます。DBに新しいテーブルやトリガーを追加せず、確定済み（`finalized=1`）の行を日本時間の日付で集計します。
 
-日別集計はSatellite以外も含む全譜面です。Satelliteに登録されていない譜面名は「難易度表外の譜面」と表示します。未確定の行は除外し、その件数をページに表示します。
+日別集計は登録した難易度表以外も含む全譜面です。同じ譜面が複数の表にある場合でも、プレイ数や判定数を重複集計しません。所属レベルは `sl6 / Fav0` のように表示します。どの表にも登録されていない譜面名は「難易度表外の譜面」と表示します。未確定の行は除外し、その件数をページに表示します。
 
 判定数はPG・GR・GD・BD・PRの増分合計です。皿やLNなどのゲーム側の集計を含み、鍵盤だけの物理的なキー押下回数とは異なります。演奏時間はログの `playtime_delta`、プレイ数は `player_playcount_delta` の合計です。ランプ更新はベストの通常ランプ上昇、BP改善は以前の記録からの最小BP減少です。初回BP記録は改善件数に含めません。
 
@@ -70,6 +73,8 @@ https://neeted.github.io/bemusicseeker-unofficial-fork/manual.ja.html#lr2プレ�
 ## 技術構成
 
 フロントエンドは依存ライブラリなしのHTML/CSS/JavaScript、エクスポータはPython標準ライブラリのみです。GitHub Pagesの配信元は `main` ブランチのルートで、`.nojekyll` を配置しています。
+
+すべての難易度表を取得してから1回のDB読み取りで出力します。レベル順は難易度表の `level_order` があれば、その定義に従います。
 
 難易度表の取得・DB読み取りに失敗した場合は公開JSONを置き換えず、GitHubへの同期も中止します。更新スクリプトは `data/viewer.json` だけをコミットします。
 

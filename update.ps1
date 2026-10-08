@@ -4,8 +4,7 @@ Push-Location -LiteralPath $PSScriptRoot
 try {
     $configPath = Join-Path $PSScriptRoot 'config.local.json'
     if (-not (Test-Path -LiteralPath $configPath)) { throw 'config.example.jsonをconfig.local.jsonにコピーし、DBのパスを設定してください。' }
-    $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
-    python -X utf8 (Join-Path $PSScriptRoot 'export_scores.py') --db $config.database --table-url $config.tableUrl
+    python -X utf8 (Join-Path $PSScriptRoot 'export_scores.py') --config $configPath
     if ($LASTEXITCODE -ne 0) { throw 'データ出力に失敗したため、同期しません。' }
     if ($Push) {
         git add -- data/viewer.json
