@@ -27,10 +27,22 @@ class DailyExportTests(unittest.TestCase):
                     (3,'b'*160,1728000120,1,1,500,60,0,1,None,500,None,None,None,0),
                     (4,'a'*32,1728000180,0,None,None,None,4,4,0,0,100,100,180,180)])
             c.close()
+            song_database=Path(directory)/'song.db'
+            with sqlite3.connect(song_database) as c:
+                c.execute('CREATE TABLE song(hash TEXT,title TEXT,subtitle TEXT,path TEXT)')
+                c.executemany('INSERT INTO song VALUES(?,?,?,?)',[
+                    ('A'*32,'Local title','[HYPER]','PRIVATE_FOLDER'),
+                    ('C'*32,'Outside song','[ANOTHER]','PRIVATE_FOLDER'),
+                    ('c'*32,'Outside song','[ANOTHER]','DUPLICATE_FOLDER')])
+                c.execute('CREATE TABLE grade(hash TEXT,title TEXT)')
+                c.execute('INSERT INTO grade VALUES(?,?)',('b'*160,'Course title'))
+            c.close()
+            song_before=hashlib.sha256(song_database.read_bytes()).digest()
+            self.assertEqual(exporter.local_titles(song_database,{'c'*32}),{'c'*32:'Outside song [ANOTHER]'})
             before=hashlib.sha256(database.read_bytes()).digest()
             definitions=[({'name':'A','symbol':'★'},[{'md5':'a'*32,'title':'Test','level':1}],exporter.DEFAULT_TABLE),
                 ({'name':'B','symbol':'st'},[{'md5':'a'*32,'title':'Test','level':0}],'https://stellabms.xyz/st/table.html')]
-            result=exporter.build_many(database,definitions)
+            result=exporter.build_many(database,definitions,song_database)
             day=result['history']['days'][0]
             self.assertEqual(day['notes'],300)
             self.assertEqual(day['judgements'],2498)
@@ -43,8 +55,13 @@ class DailyExportTests(unittest.TestCase):
             self.assertFalse(day['entries'][0]['scoreUpdated'])
             self.assertEqual(day['entries'][1]['newMinBp'],0)
             self.assertEqual(len(day['entries'][2]['chartId']),32)
+            self.assertEqual(day['entries'][0]['title'],'Test')
+            self.assertEqual(day['entries'][2]['title'],'Course title')
+            self.assertNotIn('PRIVATE_FOLDER',str(result))
+            self.assertNotIn('DUPLICATE_FOLDER',str(result))
             self.assertNotIn('b'*160,str(result))
             self.assertEqual(hashlib.sha256(database.read_bytes()).digest(),before)
+            self.assertEqual(hashlib.sha256(song_database.read_bytes()).digest(),song_before)
 
 if __name__=='__main__':
     unittest.main()

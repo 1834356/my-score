@@ -69,11 +69,40 @@ def compile_table(header, entries, table_url, scores):
         'sourceUrl':table_url, 'levelOrder':[str(level) for level in order] if order is not None else [],
         'skippedMissingMd5':skipped, 'charts':charts}
 
-def build_many(database, definitions):
+def local_titles(database, keys):
+    """Read only the titles needed for history, never song paths or other metadata."""
+    titles = {}
+    if not keys: return titles
+    source = Path(database).resolve(strict=True)
+    with closing(sqlite3.connect(source.as_uri()+'?mode=ro', uri=True, timeout=10)) as conn:
+        conn.execute('PRAGMA query_only=ON')
+        conn.execute('PRAGMA trusted_schema=OFF')
+        conn.execute('BEGIN')
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        for table in ('song', 'grade', 'expert', 'nonstop'):
+            if table not in tables: continue
+            needed = sorted(keys - titles.keys())
+            for offset in range(0, len(needed), 500):
+                batch = needed[offset:offset+500]
+                columns = 'hash,title,subtitle' if table == 'song' else 'hash,title'
+                rows = conn.execute(f'SELECT {columns} FROM {table} WHERE hash COLLATE NOCASE IN ('
+                    + ','.join('?' for _ in batch) + ') ORDER BY title', batch)
+                for row in rows:
+                    key = str(row[0]).lower()
+                    title = str(row[1] or '').strip()
+                    subtitle = str(row[2] or '').strip() if table == 'song' else ''
+                    label = ' '.join(part for part in (title, subtitle) if part)
+                    if label: titles.setdefault(key, label)
+    return titles
+
+def build_many(database, definitions, song_database=None):
     if not definitions: raise ValueError('難易度表を1つ以上指定してください。')
     urls = [definition[2] for definition in definitions]
     if len(urls) != len(set(urls)): raise ValueError('難易度表URLが重複しています。')
     source = Path(database).resolve(strict=True)
+    if song_database is None:
+        candidate = source.parent.parent / 'song.db'
+        song_database = candidate if source.parent.name.lower() == 'score' and candidate.is_file() else None
     with closing(sqlite3.connect(source.as_uri()+'?mode=ro', uri=True, timeout=10)) as conn:
         conn.row_factory = sqlite3.Row
         conn.execute('PRAGMA query_only=ON')
@@ -100,6 +129,9 @@ def build_many(database, definitions):
                 old_clear, new_clear, old_minbp, new_minbp, old_totalnotes, new_totalnotes,
                 old_exscore, new_exscore
                 FROM bms_lr2_play_history WHERE finalized=1 ORDER BY played_at, history_id''').fetchall()
+            if song_database is not None:
+                missing_keys = {str(row['hash']).lower() for row in rows} - titles.keys()
+                titles.update(local_titles(song_database, missing_keys))
             days = {}
             for row in rows:
                 stamp = datetime.fromtimestamp(int(row['played_at']), JST)
@@ -157,6 +189,7 @@ def write_atomic(destination, payload):
 def main():
     parser = argparse.ArgumentParser(description='LR2のスコアと既存のプレイログを読み取り専用でJSONに出力します。')
     parser.add_argument('--db',help='LR2スコアDB。--configの設定より優先します。')
+    parser.add_argument('--song-db',help='曲名を参照するLR2のsong.db。省略時はScoreフォルダの1つ上から自動検出します。')
     parser.add_argument('--config',help='databaseとtableUrlsを指定したローカル設定ファイル')
     parser.add_argument('--table-url',action='append',help='難易度表のURL。複数回指定できます。')
     parser.add_argument('--output',default=str(Path(__file__).parent/'data'/'viewer.json'))
@@ -182,7 +215,7 @@ def main():
             definitions = [(header, entries, urls[0])]
         else:
             definitions = [(*get_table(url), url) for url in urls]
-        payload=build_many(database,definitions)
+        payload=build_many(database,definitions,args.song_db or config.get('songDatabase'))
         write_atomic(args.output,payload)
         for table in payload['tables']:
             charts=table['charts']
