@@ -1,6 +1,7 @@
 """Read LR2 scores and existing BMS play logs; publish only allowlisted fields."""
 import argparse
 import hashlib
+from contextlib import closing
 from datetime import datetime, timezone, timedelta
 from html.parser import HTMLParser
 import json
@@ -73,7 +74,7 @@ def build_many(database, definitions):
     urls = [definition[2] for definition in definitions]
     if len(urls) != len(set(urls)): raise ValueError('難易度表URLが重複しています。')
     source = Path(database).resolve(strict=True)
-    with sqlite3.connect(source.as_uri()+'?mode=ro', uri=True, timeout=10) as conn:
+    with closing(sqlite3.connect(source.as_uri()+'?mode=ro', uri=True, timeout=10)) as conn:
         conn.row_factory = sqlite3.Row
         conn.execute('PRAGMA query_only=ON')
         conn.execute('PRAGMA trusted_schema=OFF')
@@ -96,13 +97,15 @@ def build_many(database, definitions):
         history = None
         if 'bms_lr2_play_history' in names:
             rows = conn.execute('''SELECT hash, played_at, player_playcount_delta, judge_delta, playtime_delta,
-                old_clear, new_clear, old_minbp, new_minbp
+                old_clear, new_clear, old_minbp, new_minbp, old_totalnotes, new_totalnotes,
+                old_exscore, new_exscore
                 FROM bms_lr2_play_history WHERE finalized=1 ORDER BY played_at, history_id''').fetchall()
             days = {}
             for row in rows:
                 stamp = datetime.fromtimestamp(int(row['played_at']), JST)
                 date = stamp.date().isoformat()
-                day = days.setdefault(date, {'date':date,'plays':0,'judgements':0,'seconds':0,'lampUpdates':0,'bpUpdates':0,'entries':[]})
+                day = days.setdefault(date, {'date':date,'plays':0,'judgements':0,'notes':0,'notesMissingPlays':0,
+                    'seconds':0,'lampUpdates':0,'bpUpdates':0,'scoreUpdates':0,'entries':[]})
                 for field,column in [('plays','player_playcount_delta'),('judgements','judge_delta'),('seconds','playtime_delta')]:
                     value = row[column]
                     if value is None or value < 0: raise ValueError('履歴の確定済み行に欠損・負の増分があります。')
@@ -110,18 +113,34 @@ def build_many(database, definitions):
                 old_lamp, new_lamp = int(row['old_clear'] or 0), int(row['new_clear'] or 0)
                 lamp_updated = new_lamp > old_lamp
                 old_bp, new_bp = row['old_minbp'], row['new_minbp']
+                plays = int(row['player_playcount_delta'])
+                total_notes = row['new_totalnotes']
+                total_notes = int(total_notes) if total_notes is not None and total_notes > 0 else None
+                notes = total_notes * plays if total_notes is not None else None
+                day['notes'] += notes or 0
+                day['notesMissingPlays'] += plays if notes is None else 0
+                old_ex, new_ex = row['old_exscore'], row['new_exscore']
+                score_updated = old_lamp > 0 and old_ex is not None and new_ex is not None and new_ex > old_ex
                 # A first play establishes a BP; it is not a reduction from an existing best.
                 bp_updated = old_lamp > 0 and old_bp is not None and new_bp is not None and 0 <= new_bp < old_bp
                 day['lampUpdates'] += int(lamp_updated); day['bpUpdates'] += int(bp_updated)
+                day['scoreUpdates'] += int(score_updated)
                 key = str(row['hash']).lower()
                 belonging = memberships.get(key, [])
-                day['entries'].append({'time':stamp.strftime('%H:%M:%S'),'title':titles.get(key,'難易度表外の譜面'),
+                chart_id = key if MD5.fullmatch(key) else hashlib.sha256(key.encode('utf-8')).hexdigest()[:32]
+                day['entries'].append({'chartId':chart_id,'time':stamp.strftime('%H:%M:%S'),'title':titles.get(key,'難易度表外の譜面'),
                     'level':belonging[0]['level'] if belonging else None,
                     'tableLabels':[member['label'] for member in belonging],
-                    'judgements':int(row['judge_delta']), 'lampUpdated':lamp_updated,'bpUpdated':bp_updated})
+                    'plays':plays,'totalNotes':total_notes,'notes':notes,
+                    'oldLamp':old_lamp,'newLamp':new_lamp,'oldMinBp':old_bp,'newMinBp':new_bp,
+                    'oldExScore':old_ex,'newExScore':new_ex,'oldTotalNotes':row['old_totalnotes'],
+                    'judgements':int(row['judge_delta']), 'lampUpdated':lamp_updated,'bpUpdated':bp_updated,
+                    'scoreUpdated':score_updated})
             pending = conn.execute('SELECT COUNT(*) FROM bms_lr2_play_history WHERE finalized!=1 OR finalized IS NULL').fetchone()[0]
             history = {'scope':'全譜面の確定済みログ（登録した難易度表以外も含む）','timezone':'Asia/Tokyo',
-                'source':'BeMusicSeeker LR2 play history','excludedUnfinalized':pending,'days':sorted(days.values(),key=lambda d:d['date'],reverse=True)}
+                'source':'BeMusicSeeker LR2 play history','detailsVersion':2,
+                'noteCountMethod':'new_totalnotes × player_playcount_delta',
+                'excludedUnfinalized':pending,'days':sorted(days.values(),key=lambda d:d['date'],reverse=True)}
     return {'schemaVersion':1,'demo':False,'generatedAt':datetime.now(JST).isoformat(timespec='seconds'),
         'tables':output_tables,'history':history}
 
