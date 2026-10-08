@@ -24,19 +24,25 @@ LR2のスコアDBを読み取り、複数の難易度表のランプ・最小BP�
 初回設定済みのローカルフォルダでは `config.local.json` にDBの保存場所を記載しています。このファイルはGitHubには送信しません。
 
 1. LR2でプレイする。
-2. このフォルダでPowerShellを開き、以下を実行する。
+2. このフォルダ内の `update-and-backup.cmd` をダブルクリックする。日時付きDBバックアップ、閲覧用JSONの更新、GitHubへの同期を順に実行します。完了後はキーを押してウィンドウを閉じられます。
+
+PowerShellから実行する場合は、以下のコマンドです。
 
 ```powershell
 .\update.ps1 -Push
 ```
 
-この処理は公開難易度表を取得し、スコアDBを読み取り専用で開き、`data/viewer.json` を出力してGitHubへ送ります。GitHub Pagesの反映後、スマホ側のページを再読み込みしてください。自動実行は設定していません。
+`config.local.json` の `backupDirectory` が設定されている場合は、最初に元DBをSQLiteのバックアップ機能で保存します。書き込み中のDBにも対応し、整合性確認を通過したものだけを日時付きの `.db` として残します。既存バックアップは上書き・削除しません。バックアップに失敗すると、閲覧用JSONの更新とGitHubへの同期も中止します。
 
-JSONを書き出すだけなら次のコマンドです。
+続いて公開難易度表を取得し、スコアDBを読み取り専用で開き、`data/viewer.json` を出力してGitHubへ送ります。GitHub Pagesの反映後、スマホ側のページを再読み込みしてください。自動実行は設定していません。
+
+GitHubへ同期せず、DBバックアップとJSONの書き出しだけ実行する場合は次のコマンドです。
 
 ```powershell
 .\update.ps1
 ```
+
+DBバックアップだけ実行する場合は `.\update.ps1 -BackupOnly` を使えます。バックアップ先は `config.local.json` の `backupDirectory` で変更できます。保存名は `player_YYYYMMDD_HHMMSS_ffffff.db`（日本時間）です。元DBは全内容をローカルに保存し、GitHubへは閲覧用JSONだけを同期します。バックアップ先がOneDrive内なら、OneDriveの通常の同期対象になります。
 
 ## 別のPCで設定する
 
@@ -48,7 +54,7 @@ cd lr2-score-viewer
 Copy-Item config.example.json config.local.json
 ```
 
-`config.local.json` の `database` を使用中のLR2スコアDBのパスへ変更します。`tableUrls` 配列に閲覧したい難易度表のURLを指定します。曲名用の `song.db` は、スコアDBの `Score` フォルダの1つ上から自動検出します。別の場所にある場合は `songDatabase` をローカル設定へ追加するか、`--song-db` で指定できます。曲名以外のフォルダパスなどは公開JSONに出力しません。旧設定の `tableUrl`（単一URL）も引き続き使用できます。その後 `update.ps1 -Push` を実行してください。
+`config.local.json` の `database` を使用中のLR2スコアDBのパスへ変更します。`backupDirectory` をバックアップの保存先へ変更し、`tableUrls` 配列に閲覧したい難易度表のURLを指定します。曲名用の `song.db` は、スコアDBの `Score` フォルダの1つ上から自動検出します。別の場所にある場合は `songDatabase` をローカル設定へ追加するか、`--song-db` で指定できます。曲名以外のフォルダパスなどは公開JSONに出力しません。旧設定の `tableUrl`（単一URL）も引き続き使用できます。その後 `update.ps1 -Push` を実行してください。
 
 ## データと公開範囲
 
