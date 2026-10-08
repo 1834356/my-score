@@ -62,7 +62,12 @@ def compile_table(header, entries, table_url, scores):
         if not 0 <= lamp <= 5: raise ValueError('未対応のLR2ランプ値があります。')
         bp = score['minbp'] if score and (lamp > 0 or (score['playcount'] or 0) > 0) else None
         bp = int(bp) if bp is not None and bp >= 0 else None
-        charts.append({'md5':key, 'title':str(entry.get('title') or key), 'level':str(entry['level']), 'lamp':lamp, 'minBp':bp})
+        played = score is not None and (lamp > 0 or (score['playcount'] or 0) > 0)
+        notes = int(score['totalnotes']) if played and score['totalnotes'] is not None and score['totalnotes'] > 0 else None
+        ex_score = int(score['perfect']) * 2 + int(score['great']) if notes is not None and all(
+            score[column] is not None and score[column] >= 0 for column in ('perfect', 'great')) else None
+        charts.append({'md5':key, 'title':str(entry.get('title') or key), 'level':str(entry['level']),
+            'lamp':lamp, 'minBp':bp, 'exScore':ex_score, 'totalNotes':notes})
     order = header.get('level_order')
     if order is not None and not isinstance(order, list): raise ValueError('level_orderの形式が正しくありません。')
     return {'id':table_id(table_url), 'name':str(header['name']), 'symbol':str(header['symbol']),
@@ -109,7 +114,7 @@ def build_many(database, definitions, song_database=None):
         conn.execute('PRAGMA trusted_schema=OFF')
         conn.execute('BEGIN')
         scores = {}
-        for row in conn.execute('SELECT hash, clear, minbp, playcount FROM score'):
+        for row in conn.execute('SELECT hash, clear, minbp, playcount, perfect, great, totalnotes FROM score'):
             key = str(row['hash']).lower()
             if MD5.fullmatch(key):
                 if key in scores: raise ValueError('スコアDBに重複したMD5があります。')

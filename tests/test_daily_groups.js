@@ -5,7 +5,8 @@ const path=require('node:path');
 const vm=require('node:vm');
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const context=vm.createContext({});
-for(const name of ['dailyChanges','reachedAAA']){
+vm.runInContext(html.split('\n').find(line=>line.startsWith('const lamps=')),context);
+for(const name of ['dailyChanges','reachedAAA','scoreRate','lampCounts']){
   const definition=html.split('\n').find(line=>line.startsWith(`function ${name}(`));
   assert.ok(definition,`Missing ${name}`);
   vm.runInContext(definition,context);
@@ -29,4 +30,11 @@ assert.equal(context.reachedAAA(178,100),true);
 assert.equal(context.reachedAAA(16,9),true);
 assert.equal(context.reachedAAA(null,100),false);
 assert.equal(context.reachedAAA(0,0),false);
-console.log('Daily grouping and AAA boundary checks passed');
+assert.equal(context.scoreRate(180,100),90);
+assert.equal(context.scoreRate(0,100),0);
+assert.equal(context.scoreRate(200,100),100);
+assert.equal(context.scoreRate(null,100),null);
+assert.equal(context.scoreRate(10,0),null);
+assert.equal(context.scoreRate(undefined,100),null);
+assert.deepEqual(Array.from(context.lampCounts([{lamp:2},{lamp:2},{lamp:0},{lamp:6}])),[1,0,2,0,0,0,1]);
+console.log('Daily grouping, score rate, and lamp breakdown checks passed');

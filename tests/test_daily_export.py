@@ -15,8 +15,8 @@ class DailyExportTests(unittest.TestCase):
             assert Path(directory).resolve().parent == Path.cwd().resolve()
             database=Path(directory)/'fixture.db'
             with sqlite3.connect(database) as c:
-                c.execute('CREATE TABLE score(hash TEXT, clear INTEGER, minbp INTEGER, playcount INTEGER)')
-                c.execute('INSERT INTO score VALUES(?,?,?,?)',('a'*32,4,0,3))
+                c.execute('CREATE TABLE score(hash TEXT, clear INTEGER, minbp INTEGER, playcount INTEGER, perfect INTEGER, great INTEGER, totalnotes INTEGER)')
+                c.executemany('INSERT INTO score VALUES(?,?,?,?,?,?,?)',[('a'*32,4,0,3,80,20,100),('d'*32,1,100,1,0,0,100),('e'*32,0,None,0,0,0,100),('f'*32,1,0,1,0,0,0)])
                 c.execute('''CREATE TABLE bms_lr2_play_history(history_id INTEGER, hash TEXT, played_at INTEGER,
                     finalized INTEGER, player_playcount_delta INTEGER, judge_delta INTEGER, playtime_delta INTEGER,
                     old_clear INTEGER,new_clear INTEGER,old_minbp INTEGER,new_minbp INTEGER,
@@ -43,6 +43,17 @@ class DailyExportTests(unittest.TestCase):
             definitions=[({'name':'A','symbol':'★'},[{'md5':'a'*32,'title':'Test','level':1}],exporter.DEFAULT_TABLE),
                 ({'name':'B','symbol':'st'},[{'md5':'a'*32,'title':'Test','level':0}],'https://stellabms.xyz/st/table.html')]
             result=exporter.build_many(database,definitions,song_database)
+            chart=result['tables'][0]['charts'][0]
+            self.assertEqual((chart['exScore'],chart['totalNotes']),(180,100))
+            with sqlite3.connect(database) as c:
+                c.row_factory=sqlite3.Row
+                scores={r['hash']:r for r in c.execute('SELECT * FROM score')}
+            c.close()
+            charts=exporter.compile_table({'name':'Test','symbol':'★'},[{'md5':k,'level':0} for k in scores],exporter.DEFAULT_TABLE,scores)['charts']
+            values={c['md5']:(c['exScore'],c['totalNotes']) for c in charts}
+            self.assertEqual(values['d'*32],(0,100))
+            self.assertEqual(values['e'*32],(None,None))
+            self.assertEqual(values['f'*32],(None,None))
             day=result['history']['days'][0]
             self.assertEqual(day['notes'],300)
             self.assertEqual(day['judgements'],2498)
