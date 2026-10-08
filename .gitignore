@@ -1,0 +1,11 @@
+# Original LR2 databases, settings and local score exports must stay off GitHub.
+*.db
+*.db-*
+*.sqlite*
+config.local.*
+score*.json
+snapshot*.json
+history*.json
+private/
+__pycache__/
+*.tmp
