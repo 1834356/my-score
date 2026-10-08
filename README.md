@@ -1,4 +1,4 @@
-# LR2 Score Viewer
+# My Score
 
 LR2のスコアDBを読み取り、複数の難易度表のランプ・最小BPと日々のプレイ記録をGitHub Pagesで閲覧する個人用ページです。
 
@@ -6,8 +6,10 @@ LR2のスコアDBを読み取り、複数の難易度表のランプ・最小BP�
 - Stella: https://stellabms.xyz/st/table.html
 - Favorite: https://bms-ir.org/new/table/16
 - 発狂BMS難易度表: https://miraiscarlet.github.io/bms/table/genocide_insane/insane_bms.html
-- 閲覧ページ: https://1834356.github.io/lr2-score-viewer/
-- ソース: https://github.com/1834356/lr2-score-viewer
+- 閲覧ページ: https://1834356.github.io/my-score/
+- ソース: https://github.com/1834356/my-score
+
+他の方が利用する場合は、スコアデータを含まない[配布用リポジトリ](https://github.com/1834356/lr2-score-viewer)をフォークしてください。
 
 ## 表示機能
 
@@ -49,8 +51,8 @@ DBバックアップだけ実行する場合は `.\update.ps1 -BackupOnly` を�
 Python 3.10以上とGitが必要です。Gitには対象GitHubアカウントの認証を設定してください。
 
 ```powershell
-git clone https://github.com/1834356/lr2-score-viewer.git
-cd lr2-score-viewer
+git clone https://github.com/1834356/my-score.git
+cd my-score
 Copy-Item config.example.json config.local.json
 ```
 
