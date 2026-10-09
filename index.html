@@ -46,7 +46,7 @@
 const lamps=[['NO PLAY','#526174'],['FAILED','#e77482'],['EASY','#69d8aa'],['CLEAR','#70c9ec'],['HARD','#f0c671'],['FC','#dab1ff'],['PERFECT','#ffffff']];
 const graphLampOrder=[6,5,4,3,2,1,0];
 const $=id=>document.getElementById(id);
-let data;
+let data,manualDataSelected=false;
 const collator=new Intl.Collator('ja',{numeric:true});
 function scoreRate(score,notes){return Number.isInteger(score)&&score>=0&&Number.isInteger(notes)&&notes>0?score/(notes*2)*100:null}
 function lampCounts(charts){const counts=lamps.map(()=>0);for(const c of charts)counts[c.lamp]++;return counts}
@@ -116,10 +116,10 @@ function render(){const t=current();$('total').textContent=t.charts.length;$('cl
 }
 lamps.forEach(([label],i)=>$('lamp').append(option(String(i),label)));
 graphLampOrder.forEach(i=>{const [label,color]=lamps[i];const item=node('span');const dot=node('span',undefined,'dot');dot.style.background=color;item.append(dot,document.createTextNode(label));$('legend').append(item)});
-$('table').addEventListener('change',()=>{$('query').value='';$('lamp').value='';selectTable();saveView()});['level','lamp','sort'].forEach(id=>$(id).addEventListener('change',updateView));$('query').addEventListener('input',updateView);$('demo').addEventListener('click',()=>load(sample()));
+$('table').addEventListener('change',()=>{$('query').value='';$('lamp').value='';selectTable();saveView()});['level','lamp','sort'].forEach(id=>$(id).addEventListener('change',updateView));$('query').addEventListener('input',updateView);$('demo').addEventListener('click',()=>{manualDataSelected=true;load(sample())});
 $('day').addEventListener('change',()=>{renderHistory();selectValue('month',$('day').value.slice(0,7));renderMonth()});
 $('month').addEventListener('change',renderMonth);$('month-prev').addEventListener('click',()=>moveMonth(1));$('month-next').addEventListener('click',()=>moveMonth(-1));
-$('file').addEventListener('change',async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>25*1024*1024)throw Error('JSONは25MB以下にしてください。');load(JSON.parse(await file.text()))}catch(err){$('error').textContent=`読み込みエラー: ${err.message}`;$('error').hidden=false}finally{e.target.value=''}});
+$('file').addEventListener('change',async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>25*1024*1024)throw Error('JSONは25MB以下にしてください。');load(JSON.parse(await file.text()));manualDataSelected=true}catch(err){$('error').textContent=`読み込みエラー: ${err.message}`;$('error').hidden=false}finally{e.target.value=''}});
 load(sample());
 // GitHub Pagesでは同じサイトに置いた閲覧用データを取得します。
 // データ未配置時は、明示したデモ表示を維持します。
@@ -128,8 +128,8 @@ if(location.protocol==='https:'||location.protocol==='http:'){
  fetch('./data/viewer.json',{cache:'no-store',signal:controller.signal}).then(async response=>{
   if(response.status===404)return;
   if(!response.ok)throw Error(`公開データの取得に失敗しました (${response.status})`);
-  load(await response.json());
- }).catch(err=>{$('error').textContent=`公開データを表示できません: ${err.message}`;$('error').hidden=false}).finally(()=>clearTimeout(timeout));
+  const published=await response.json();if(!manualDataSelected)load(published);
+ }).catch(err=>{if(manualDataSelected)return;$('error').textContent=`公開データを表示できません: ${err.message}`;$('error').hidden=false}).finally(()=>clearTimeout(timeout));
 }
 </script>
 </html>
