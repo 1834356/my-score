@@ -6,7 +6,7 @@ const vm=require('node:vm');
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const context=vm.createContext({});
 vm.runInContext(html.split('\n').find(line=>line.startsWith('const lamps=')),context);
-for(const name of ['dailyChanges','reachedAAA','scoreRate','lampCounts','monthsFor','calendarDates','monthSummary']){
+for(const name of ['dailyChanges','reachedAAA','scoreRate','lampCounts','monthsFor','calendarDates','monthSummary','sheetChunks']){
   const definition=html.split('\n').find(line=>line.startsWith(`function ${name}(`));
   assert.ok(definition,`Missing ${name}`);
   vm.runInContext(definition,context);
@@ -49,3 +49,14 @@ assert.equal(context.calendarDates('2026-02').filter(Boolean).length,28);
 const month=context.monthSummary([{date:'2024-02-01',plays:2,notes:2000,seconds:240,notesMissingPlays:0},{date:'2024-02-02',plays:1,notes:0,seconds:60,notesMissingPlays:1},{date:'2024-02-03',plays:0,notes:0,seconds:0},{date:'2024-02-04',plays:1,seconds:30},{date:'2024-03-01',plays:99,notes:99000,seconds:9900}], '2024-02');
 assert.equal(month.notes,2000);assert.equal(month.plays,4);assert.equal(month.playDays,3);assert.equal(month.seconds,330);assert.equal(month.missingPlays,1);assert.equal(month.missingDays,1);
 console.log('Monthly totals, missing note counts, leap years and year boundaries passed');
+
+for(const counts of [[],[1],[75],[2,4,25,2,60],[1,1,1,1,1,1,1,1,1],[200,1,400]]){
+ for(let columns=1;columns<=6;columns++){
+  const packed=context.sheetChunks(counts,columns);
+  assert.equal(packed.length,columns);
+  const actual=Array.from(packed).flatMap(column=>Array.from(column).flatMap(chunk=>Array.from({length:chunk.end-chunk.start},(_,i)=>`${chunk.group}:${chunk.start+i}`)));
+  const expected=counts.flatMap((count,group)=>Array.from({length:count},(_,i)=>`${group}:${i}`));
+  assert.deepEqual(actual,expected,'All screenshot updates remain present exactly once and in order');
+ }
+}
+console.log('Screenshot column splitting preserves all updates across 1–6 columns');
