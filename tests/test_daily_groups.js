@@ -6,7 +6,7 @@ const vm=require('node:vm');
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const context=vm.createContext({});
 vm.runInContext(html.split('\n').find(line=>line.startsWith('const lamps=')),context);
-for(const name of ['dailyChanges','reachedAAA','scoreRate','lampCounts','monthsFor','calendarDates','monthSummary','sheetChunks']){
+for(const name of ['dailyChanges','reachedAAA','scoreRate','lampCounts','monthsFor','calendarDates','monthSummary','sheetChunks','sheetImageSize','imageEllipsis']){
   const definition=html.split('\n').find(line=>line.startsWith(`function ${name}(`));
   assert.ok(definition,`Missing ${name}`);
   vm.runInContext(definition,context);
@@ -60,3 +60,17 @@ for(const counts of [[],[1],[75],[2,4,25,2,60],[1,1,1,1,1,1,1,1,1],[200,1,400]])
  }
 }
 console.log('Screenshot column splitting preserves all updates across 1–6 columns');
+
+for(const [width,height] of [[540,1500],[1564,940],[3100,4000],[15000,20000]]){
+ const image=context.sheetImageSize(width,height);
+ assert.ok(image.width>0&&image.height>0);
+ assert.ok(image.width<=4096&&image.height<=4096);
+ assert.ok(image.width*image.height<=4000000,'PNG stays within the canvas memory budget');
+ assert.ok(image.scale<=2);
+ assert.ok(Math.abs(image.width-width*image.scale)<=1&&Math.abs(image.height-height*image.scale)<=1);
+}
+const textContext={measureText:text=>({width:Array.from(text).length*10})};
+assert.equal(context.imageEllipsis(textContext,'短い曲名',100),'短い曲名');
+assert.equal(context.imageEllipsis(textContext,'曲名😀と譜面名',40),'曲名😀…');
+assert.equal(context.imageEllipsis(textContext,'曲名',9),'');
+console.log('PNG dimensions, memory limit and Unicode title truncation passed');
