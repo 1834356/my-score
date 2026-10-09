@@ -6,7 +6,7 @@ const vm=require('node:vm');
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const context=vm.createContext({});
 vm.runInContext(html.split('\n').find(line=>line.startsWith('const lamps=')),context);
-for(const name of ['dailyChanges','reachedAAA','scoreRate','lampCounts']){
+for(const name of ['dailyChanges','reachedAAA','scoreRate','lampCounts','monthsFor','calendarDates','monthSummary']){
   const definition=html.split('\n').find(line=>line.startsWith(`function ${name}(`));
   assert.ok(definition,`Missing ${name}`);
   vm.runInContext(definition,context);
@@ -38,3 +38,14 @@ assert.equal(context.scoreRate(10,0),null);
 assert.equal(context.scoreRate(undefined,100),null);
 assert.deepEqual(Array.from(context.lampCounts([{lamp:2},{lamp:2},{lamp:0},{lamp:6}])),[1,0,2,0,0,0,1]);
 console.log('Daily grouping, score rate, and lamp breakdown checks passed');
+
+assert.deepEqual(Array.from(context.monthsFor([{date:'2024-12-31'},{date:'2025-02-01'}],'2025-03-01T12:00:00+09:00')),['2025-03','2025-02','2025-01','2024-12']);
+assert.deepEqual(Array.from(context.monthsFor([],null)),[]);
+const leap=context.calendarDates('2024-02');
+assert.equal(leap.filter(Boolean).length,29);
+assert.deepEqual(Array.from(leap.slice(0,4)),[null,null,null,null]);
+assert.equal(leap.at(-1),'2024-02-29');
+assert.equal(context.calendarDates('2026-02').filter(Boolean).length,28);
+const month=context.monthSummary([{date:'2024-02-01',plays:2,notes:2000,seconds:240,notesMissingPlays:0},{date:'2024-02-02',plays:1,notes:0,seconds:60,notesMissingPlays:1},{date:'2024-02-03',plays:0,notes:0,seconds:0},{date:'2024-02-04',plays:1,seconds:30},{date:'2024-03-01',plays:99,notes:99000,seconds:9900}], '2024-02');
+assert.equal(month.notes,2000);assert.equal(month.plays,4);assert.equal(month.playDays,3);assert.equal(month.seconds,330);assert.equal(month.missingPlays,1);assert.equal(month.missingDays,1);
+console.log('Monthly totals, missing note counts, leap years and year boundaries passed');

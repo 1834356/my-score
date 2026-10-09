@@ -1,8 +1,10 @@
 """Create a consistent, read-only SQLite backup of the local LR2 score DB."""
 import argparse
+import hashlib
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 import json
+import re
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -10,7 +12,14 @@ import time
 
 JST = timezone(timedelta(hours=9))
 
-def backup_database(database, directory):
+def file_digest(path):
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.digest()
+
+def backup_database(database, directory, force=False):
     source = Path(database).resolve(strict=True)
     if not source.is_file(): raise ValueError('スコアDBがファイルではありません。')
     folder = Path(directory).resolve()
@@ -33,6 +42,12 @@ def backup_database(database, directory):
                 origin.backup(target, pages=256, progress=progress, sleep=0.1)
                 if target.execute('PRAGMA quick_check').fetchall() != [('ok',)]:
                     raise ValueError('バックアップDBの整合性確認に失敗しました。')
+        # Compare the consistent snapshot, including committed WAL contents.
+        pattern = re.compile(re.escape(source.stem) + r'_\d{8}_\d{6}_\d{6}\.db$')
+        previous = max((p for p in folder.iterdir() if p.is_file() and pattern.fullmatch(p.name)),
+                       key=lambda p: p.name, default=None)
+        if not force and previous is not None and file_digest(previous) == file_digest(temporary):
+            return None
         # rename fails on Windows if this unique destination already exists.
         if destination.exists(): raise FileExistsError('同名のバックアップが既に存在します。')
         temporary.rename(destination)
@@ -45,6 +60,7 @@ def main():
     parser.add_argument('--config', help='databaseとbackupDirectoryを指定したローカル設定')
     parser.add_argument('--db', help='LR2スコアDB。ローカル設定より優先します。')
     parser.add_argument('--directory', help='バックアップ先。ローカル設定より優先します。')
+    parser.add_argument('--force', action='store_true', help='同じ内容でも日時付きバックアップを保存します。')
     args = parser.parse_args()
     try:
         config = json.loads(Path(args.config).read_text(encoding='utf-8-sig')) if args.config else {}
@@ -52,8 +68,8 @@ def main():
         directory = args.directory or config.get('backupDirectory')
         if not isinstance(database, str) or not database.strip(): raise ValueError('スコアDBを指定してください。')
         if not isinstance(directory, str) or not directory.strip(): raise ValueError('バックアップ先を指定してください。')
-        destination = backup_database(database, directory)
-        print(f'バックアップ完了: {destination}')
+        destination = backup_database(database, directory, force=args.force)
+        print(f'バックアップ完了: {destination}' if destination else 'DBに変更がないため、バックアップ保存を省略しました。')
     except Exception as error:
         parser.exit(1, f'バックアップに失敗しました: {error}\n')
 

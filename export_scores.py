@@ -186,10 +186,19 @@ def build(database, header, entries, table_url=DEFAULT_TABLE):
 
 def write_atomic(destination, payload):
     destination = Path(destination)
+    if destination.is_file():
+        try:
+            previous = json.loads(destination.read_text(encoding='utf-8-sig'))
+            if isinstance(previous, dict) and {k:v for k,v in previous.items() if k != 'generatedAt'} == {
+                    k:v for k,v in payload.items() if k != 'generatedAt'}:
+                return False
+        except (ValueError, UnicodeError):
+            pass
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(destination.suffix+'.tmp')
     temporary.write_text(json.dumps(payload,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
     temporary.replace(destination)
+    return True
 
 def main():
     parser = argparse.ArgumentParser(description='LR2のスコアと既存のプレイログを読み取り専用でJSONに出力します。')
@@ -221,11 +230,11 @@ def main():
         else:
             definitions = [(*get_table(url), url) for url in urls]
         payload=build_many(database,definitions,args.song_db or config.get('songDatabase'))
-        write_atomic(args.output,payload)
+        changed = write_atomic(args.output,payload)
         for table in payload['tables']:
             charts=table['charts']
             print(f"{table['name']}: {len(charts)}譜面 / ランプ記録あり {sum(c['lamp']>0 for c in charts)}譜面")
-        print(f"出力完了: {len(payload['tables'])}表 / 履歴 {sum(len(d['entries']) for d in (payload['history'] or {}).get('days',[]))}件")
+        print(f"出力完了: {len(payload['tables'])}表 / 履歴 {sum(len(d['entries']) for d in (payload['history'] or {}).get('days',[]))}件" if changed else '閲覧データに変更がないため、JSONの更新を省略しました。')
     except Exception as error:
         parser.exit(1,f'出力に失敗しました: {error}\n')
 

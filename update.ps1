@@ -25,6 +25,16 @@ try {
             git commit --only -m 'Update LR2 score data' -- data/viewer.json
             if ($LASTEXITCODE -ne 0) { throw 'git commitに失敗しました。' }
         } elseif ($LASTEXITCODE -ne 0) { throw 'git diffに失敗しました。' }
+        # Only contact GitHub when main contains commits not yet pushed.
+        git rev-parse --verify --quiet refs/remotes/origin/main > $null
+        if ($LASTEXITCODE -eq 0) {
+            $pending = git rev-list --count refs/remotes/origin/main..main
+            if ($LASTEXITCODE -ne 0) { throw '未同期コミットの確認に失敗しました。' }
+            if ([int]$pending -eq 0) {
+                Write-Host '同期する変更がないため、GitHubへの送信を省略しました。'
+                return
+            }
+        }
         # Retry previously committed data too, if an earlier push failed.
         git push origin main
         if ($LASTEXITCODE -ne 0) { throw 'git pushに失敗しました。ネットワークとGitHub認証を確認してください。' }

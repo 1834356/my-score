@@ -25,16 +25,30 @@ class BackupTests(unittest.TestCase):
                 folder = root/'日本語 バックアップ'
                 first = backup.backup_database(source, folder)
                 second = backup.backup_database(source, folder)
+                self.assertIsNone(second)
+                self.assertEqual(len(list(folder.glob('*.db'))), 1)
+                for path, digest in before:
+                    self.assertEqual(hashlib.sha256(path.read_bytes()).digest(), digest)
+                # A main-file checksum alone would miss this uncheckpointed change.
+                connection.execute('UPDATE score SET minbp=3')
+                connection.commit()
+                second = backup.backup_database(source, folder)
                 self.assertNotEqual(first, second)
                 self.assertEqual(len(list(folder.glob('*.db'))), 2)
                 self.assertEqual(list(folder.glob('*.tmp')), [])
-                for output in (first, second):
+                for output, bp in ((first, 7), (second, 3)):
                     with sqlite3.connect(output) as reader:
-                        self.assertEqual(reader.execute('SELECT minbp FROM score').fetchall(), [(7,)])
+                        self.assertEqual(reader.execute('SELECT minbp FROM score').fetchall(), [(bp,)])
                         self.assertEqual(reader.execute('PRAGMA quick_check').fetchone(), ('ok',))
                     reader.close()
-                for p, digest in before:
-                    self.assertEqual(hashlib.sha256(p.read_bytes()).digest(), digest)
+                self.assertEqual(hashlib.sha256(source.read_bytes()).digest(), before[0][1])
+                # A repeated call reads the WAL without modifying the source.
+                wal_before = hashlib.sha256(wal.read_bytes()).digest()
+                self.assertIsNone(backup.backup_database(source, folder))
+                self.assertEqual(hashlib.sha256(wal.read_bytes()).digest(), wal_before)
+                third = backup.backup_database(source, folder, force=True)
+                self.assertIsNotNone(third)
+                self.assertEqual(len(list(folder.glob('*.db'))), 3)
             finally:
                 connection.close()
 
