@@ -165,7 +165,7 @@ def build_many(database, definitions, song_database=None):
                 key = str(row['hash']).lower()
                 belonging = memberships.get(key, [])
                 chart_id = key if MD5.fullmatch(key) else hashlib.sha256(key.encode('utf-8')).hexdigest()[:32]
-                day['entries'].append({'chartId':chart_id,'time':stamp.strftime('%H:%M:%S'),'title':titles.get(key,'難易度表外の譜面'),
+                day['entries'].append({'chartId':chart_id,'md5':key if MD5.fullmatch(key) else None,'time':stamp.strftime('%H:%M:%S'),'title':titles.get(key,'難易度表外の譜面'),
                     'level':belonging[0]['level'] if belonging else None,
                     'tableLabels':[member['label'] for member in belonging],
                     'plays':plays,'totalNotes':total_notes,'notes':notes,

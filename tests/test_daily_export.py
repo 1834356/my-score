@@ -66,6 +66,8 @@ class DailyExportTests(unittest.TestCase):
             self.assertFalse(day['entries'][0]['scoreUpdated'])
             self.assertEqual(day['entries'][1]['newMinBp'],0)
             self.assertEqual(len(day['entries'][2]['chartId']),32)
+            self.assertIsNone(day['entries'][2]['md5'],'Course identifiers must not create a fabricated chart link')
+            self.assertEqual(day['entries'][0]['md5'],'a'*32)
             self.assertEqual(day['entries'][0]['title'],'Test')
             self.assertEqual(day['entries'][2]['title'],'Course title')
             self.assertNotIn('PRIVATE_FOLDER',str(result))
