@@ -1,28 +1,39 @@
-﻿param([switch]$Push, [switch]$BackupOnly)
+﻿param([switch]$Push, [switch]$BackupOnly, [switch]$BmzOnly)
 $ErrorActionPreference = 'Stop'
 Push-Location -LiteralPath $PSScriptRoot
 try {
     $configPath = Join-Path $PSScriptRoot 'config.local.json'
     if (-not (Test-Path -LiteralPath $configPath)) { throw 'config.example.jsonをconfig.local.jsonにコピーし、DBのパスを設定してください。' }
     if ($BackupOnly -and $Push) { throw 'BackupOnlyとPushは同時に指定できません。' }
+    if ($BackupOnly -and $BmzOnly) { throw 'BackupOnlyとBmzOnlyは同時に指定できません。' }
     $localConfig = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($localConfig.backupDirectory) {
-        python -X utf8 (Join-Path $PSScriptRoot 'backup_scores.py') --config $configPath
-        if ($LASTEXITCODE -ne 0) { throw 'バックアップに失敗したため、更新を中止します。' }
-    } elseif ($BackupOnly) {
-        throw 'config.local.jsonにbackupDirectoryを設定してください。'
-    } else {
-        Write-Host 'バックアップ先が未設定のため、閲覧用データのみ更新します。'
+    if ($BmzOnly -and -not $localConfig.bmz) { throw 'config.local.jsonにbmzを設定してください。' }
+    $dataPaths = @()
+    if (-not $BmzOnly) {
+        if ($localConfig.backupDirectory) {
+            python -X utf8 (Join-Path $PSScriptRoot 'backup_scores.py') --config $configPath
+            if ($LASTEXITCODE -ne 0) { throw 'バックアップに失敗したため、更新を中止します。' }
+        } elseif ($BackupOnly) {
+            throw 'config.local.jsonにbackupDirectoryを設定してください。'
+        } else {
+            Write-Host 'バックアップ先が未設定のため、閲覧用データのみ更新します。'
+        }
+        if ($BackupOnly) { return }
+        python -X utf8 (Join-Path $PSScriptRoot 'export_scores.py') --config $configPath
+        if ($LASTEXITCODE -ne 0) { throw 'LR2データの出力に失敗したため、同期しません。' }
+        $dataPaths += 'data/viewer.json'
     }
-    if ($BackupOnly) { return }
-    python -X utf8 (Join-Path $PSScriptRoot 'export_scores.py') --config $configPath
-    if ($LASTEXITCODE -ne 0) { throw 'データ出力に失敗したため、同期しません。' }
+    if ($localConfig.bmz) {
+        python -X utf8 (Join-Path $PSScriptRoot 'export_bmz.py') --config $configPath
+        if ($LASTEXITCODE -ne 0) { throw 'BMZデータの出力に失敗したため、同期しません。' }
+        $dataPaths += 'data/bmz.json'
+    }
     if ($Push) {
-        git add -- data/viewer.json
+        git add -- @dataPaths
         if ($LASTEXITCODE -ne 0) { throw 'git addに失敗しました。' }
-        git diff --cached --quiet -- data/viewer.json
+        git diff --cached --quiet -- @dataPaths
         if ($LASTEXITCODE -eq 1) {
-            git commit --only -m 'Update LR2 score data' -- data/viewer.json
+            git commit --only -m 'Update BMS score data' -- @dataPaths
             if ($LASTEXITCODE -ne 0) { throw 'git commitに失敗しました。' }
         } elseif ($LASTEXITCODE -ne 0) { throw 'git diffに失敗しました。' }
         # Only contact GitHub when main contains commits not yet pushed.
