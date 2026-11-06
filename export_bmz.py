@@ -220,6 +220,54 @@ def build_bmz(config, table_data):
     }
 
 
+def configured_modes(config):
+    additional = config.get('additionalModes', [])
+    if not isinstance(additional, list):
+        raise ValueError('bmz.additionalModesは配列にしてください。')
+    default = {
+        'ruleMode': config.get('ruleMode', 'Beatoraja'),
+        'lnSetting': config.get('lnSetting', 'AutoLn'),
+    }
+    modes = []
+    seen = set()
+    for mode in [default, *additional]:
+        if (not isinstance(mode, dict) or mode.get('ruleMode') not in RULES
+                or mode.get('lnSetting') not in LN_SETTINGS):
+            raise ValueError('bmz.ruleModeとbmz.lnSettingを有効な組み合わせで指定してください。')
+        rule, setting = mode['ruleMode'], mode['lnSetting']
+        mode_id = f'{rule}-{setting}'
+        if mode_id in seen:
+            raise ValueError(f'BMZの表示設定が重複しています: {mode_id}')
+        seen.add(mode_id)
+        modes.append({'id': mode_id, 'ruleMode': rule, 'lnSetting': setting})
+    return modes
+
+
+def export_modes(config, table_data, output):
+    modes = configured_modes(config)
+    mode_dir = output.with_name(output.stem + '-modes')
+    index = output.with_name(output.stem + '-index.json')
+    if mode_dir.is_symlink():
+        raise ValueError('BMZの追加モードの出力先にシンボリックリンクは使えません。')
+
+    datasets = [build_bmz(config | mode, table_data) for mode in modes]
+    extra_files = {mode['id'] + '.json' for mode in modes[1:]}
+    for position, (mode, payload) in enumerate(zip(modes, datasets)):
+        target = mode_dir / (mode['id'] + '.json') if position else output
+        changed = write_atomic(target, payload)
+        recorded = sum(c['lamp'] > 0 for t in payload['tables'] for c in t['charts'])
+        plays = sum(d['plays'] for d in payload['history']['days'])
+        status = f'ランプ記録あり {recorded}譜面（表の重複含む） / 保存済みプレイ {plays}件' if changed else '変更なし'
+        print(f'BMZ {mode["id"]}: {len(payload["tables"])}表 / {status}')
+
+    write_atomic(index, {'schemaVersion': 1, 'defaultMode': modes[0]['id'], 'modes': modes})
+    known_files = {f'{rule}-{ln}.json' for rule in RULES for ln in LN_SETTINGS}
+    for filename in known_files - extra_files:
+        stale = mode_dir / filename
+        if stale.is_file() or stale.is_symlink():
+            stale.unlink()
+
+
 def main():
     root = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description='BMZのDBを読み取り専用で閲覧用JSONに出力します。')
@@ -230,12 +278,7 @@ def main():
     try:
         config = json.loads(Path(args.config).read_text(encoding='utf-8-sig'))['bmz']
         tables = json.loads(args.tables.read_text(encoding='utf-8-sig'))
-        payload = build_bmz(config, tables)
-        changed = write_atomic(args.output, payload)
-        recorded = sum(c['lamp'] > 0 for t in payload['tables'] for c in t['charts'])
-        plays = sum(d['plays'] for d in payload['history']['days'])
-        print(f'BMZ: {len(payload["tables"])}表 / ランプ記録あり {recorded}譜面（表の重複含む） / 保存済みプレイ {plays}件'
-              if changed else 'BMZの閲覧データに変更はありません。')
+        export_modes(config, tables, args.output)
     except (OSError, sqlite3.Error, ValueError, KeyError, TypeError) as error:
         parser.exit(1, f'BMZの出力に失敗しました: {error}\n')
 

@@ -6,6 +6,8 @@
 <style>
 :root{color-scheme:dark;--bg:#10151c;--panel:#18212c;--line:#2c3949;--text:#e8eef5;--muted:#a7b7c9;--accent:#6ae2be;font-family:system-ui,'Yu Gothic',sans-serif}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}main{max-width:1120px;margin:auto;padding:36px 24px}header{display:flex;justify-content:space-between;gap:24px;align-items:center}h1{font-size:26px;margin:8px 0}h2{font-size:18px;margin:0 0 20px}.eyebrow{font-size:12px;letter-spacing:.14em;color:var(--accent)}p{line-height:1.8}.muted,small{color:var(--muted)}button,input,select,.file-button{font:inherit;color:inherit;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:11px 14px}button,.file-button{cursor:pointer}button:hover,.file-button:hover{border-color:var(--accent)}button:focus-visible,input:focus-visible,select:focus-visible,.file-button:focus-within{outline:2px solid var(--accent);outline-offset:3px}.file-button{display:inline-block}.file-button input{position:absolute;width:1px;height:1px;opacity:0}#status{margin:24px 0;padding:12px 16px;background:#20392f;border-radius:8px;color:#bdf5d9}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}.metric{padding:20px;background:var(--panel);border:1px solid var(--line);border-radius:12px}.metric strong{display:block;font-size:30px;font-weight:650;margin-top:8px}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px;margin-bottom:24px}.filters{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px}.filters label{display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--muted)}.filters label:first-child{flex:1;min-width:160px}.filters input{width:100%}.graphrow{display:grid;grid-template-columns:64px 1fr 100px;align-items:center;gap:12px;margin:15px 0;font-size:13px}.bar{display:flex;height:18px;border-radius:4px;overflow:hidden;background:#0f141b}.segment{min-width:0}.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-top:22px;color:var(--muted)}.dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;white-space:nowrap;text-align:left;font-size:14px}th{color:var(--muted);font-size:12px;font-weight:500}th,td{padding:14px 12px;border-bottom:1px solid var(--line)}td.title{white-space:normal;min-width:210px}td.number{text-align:right;font-variant-numeric:tabular-nums}.lamp{display:inline-block;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:650;color:#0c1219}footer{font-size:12px;color:var(--muted)}.empty{text-align:center;color:var(--muted);padding:32px}#error{color:#ffc2b9}summary{cursor:pointer}details p{font-size:13px}code{color:var(--accent)}@media(max-width:650px){main{padding:24px 16px}header{align-items:flex-start;flex-direction:column;gap:12px}.metrics{grid-template-columns:repeat(2,1fr)}.card{padding:18px}.graphrow{grid-template-columns:48px 1fr 80px;gap:8px}.metric strong{font-size:26px}.filters label{flex:1}th,td{padding:12px 8px}}
+#bmz-mode-control:not([hidden]){display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+#bmz-mode{min-height:44px;font-size:16px;max-width:100%}
 </style>
 <style>
 .section-nav{display:flex;gap:24px;margin:20px 0 24px;font-size:14px}.section-nav a{color:var(--accent);text-underline-offset:5px}section[id]{scroll-margin-top:16px}
@@ -30,7 +32,7 @@
 </style>
 <main>
 <header><div><div class="eyebrow">PERSONAL BMS RECORD</div><h1>My Score</h1><div class="muted">難易度表ごとのランプ・最小BP・スコアレート</div></div><div><label class="file-button">閲覧用JSONを開く<input id="file" type="file" accept=".json,application/json"></label> <button id="demo">デモ</button> <button id="app-refresh" type="button">最新版を読み込む</button></div></header>
-<nav class="player-switch" aria-label="プレイヤー"><small>プレイヤー</small><a id="source-lr2" href="./">LR2</a><a id="source-bmz" href="?player=bmz">BMZ</a></nav>
+<nav class="player-switch" aria-label="プレイヤー"><small>プレイヤー</small><a id="source-lr2" href="./">LR2</a><a id="source-bmz" href="?player=bmz">BMZ</a><label id="bmz-mode-control" hidden><small>BMZの表示設定</small><select id="bmz-mode"></select></label></nav>
 <div id="status" role="status"></div><p id="error" role="alert" hidden></p>
 <div id="viewer-content">
 <nav class="section-nav" aria-label="ページ内移動"><a href="#summary">ランプ集計</a><a href="#charts">譜面一覧</a><a href="#monthly">月別記録</a><a href="#daily">日別記録</a></nav>
@@ -66,7 +68,7 @@ const lamps=[['NO PLAY','#526174'],['FAILED','#e77482'],['EASY','#69d8aa'],['CLE
 const bmzLamps=[lamps[0],lamps[1],['ASSIST','#bc8ae8'],['L-ASSIST','#aab5ee'],lamps[2],lamps[3],lamps[4],['EX HARD','#f494aa'],lamps[5],lamps[6],['MAX','#f7df77']];
 const requestedPlayer=new URLSearchParams(location.search).get('player')==='bmz'?'bmz':'lr2';
 const $=id=>document.getElementById(id);
-let data,manualDataSelected=false,publishedView=false,shareRevision=0;
+let data,manualDataSelected=false,publishedView=false,shareRevision=0,activeBmzMode=null,defaultBmzMode=null;
 const collator=new Intl.Collator('ja',{numeric:true});
 function scoreRate(score,notes){return Number.isInteger(score)&&score>=0&&Number.isInteger(notes)&&notes>0?score/(notes*2)*100:null}
 function lampCounts(charts,palette=lamps){const counts=palette.map(()=>0);for(const c of charts)counts[c.lamp]++;return counts}
@@ -79,27 +81,71 @@ function sampleHistory(){return {detailsVersion:2,excludedUnfinalized:0,days:['2
 function sample(){return {schemaVersion:1,demo:true,generatedAt:null,history:sampleHistory(),tables:[{id:'sample-a',name:'サンプル難易度表 A',symbol:'★',charts:Array.from({length:48},(_,i)=>({md5:i.toString(16).padStart(32,'0'),level:String(Math.floor(i/8)+1),title:`サンプル譜面 ${String(i+1).padStart(2,'0')}`,lamp:i%7,minBp:i%7===0?null:i%7>=5?0:Math.max(1,70-i),exScore:i%7===0?null:1800-i*3,totalNotes:i%7===0?null:1000}))},{id:'sample-b',name:'サンプル難易度表 B',symbol:'sl',charts:Array.from({length:12},(_,i)=>({md5:(100+i).toString(16).padStart(32,'0'),level:String(Math.floor(i/4)),title:`別表のサンプル譜面 ${i+1}`,lamp:i%5,minBp:i%5===0?null:80-i*3,exScore:i%5===0?null:1500-i*5,totalNotes:i%5===0?null:1000}))}]}}
 function lampPalette(view){return view?.player==='bmz'?bmzLamps:lamps}
 function lampOrder(palette){return palette.map((_,i)=>i).reverse()}
-function markPlayer(player){for(const id of ['lr2','bmz']){const link=$('source-'+id);if(id===player)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');const url=new URL(location.href);url.searchParams.delete('dailyView');url.searchParams.delete('date');url.hash='';if(id==='bmz')url.searchParams.set('player','bmz');else url.searchParams.delete('player');link.href=url.href}}
-function bmzMode(view){const rule={Beatoraja:'beatoraja',Lr2Oraja:'LR2oraja',Dx:'DX'}[view.ruleMode];const ln=view.lnSetting.replace(/^(Auto|Force)(.+)$/,(_,mode,type)=>mode.toUpperCase()+' '+type.toUpperCase());return `${rule} / ${ln}`}
+function markPlayer(player){for(const id of ['lr2','bmz']){const link=$('source-'+id);if(id===player)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');const url=new URL(location.href);url.searchParams.delete('dailyView');url.searchParams.delete('date');if(id==='bmz'&&activeBmzMode)url.searchParams.set('mode',activeBmzMode);else url.searchParams.delete('mode');url.hash='';if(id==='bmz')url.searchParams.set('player','bmz');else url.searchParams.delete('player');link.href=url.href}}
+const bmzRules={Beatoraja:'beatoraja',Lr2Oraja:'LR2oraja',Dx:'DX'};
+const bmzLnSettings=['AutoLn','AutoCn','AutoHcn','ForceLn','ForceCn','ForceHcn'];
+function bmzModeId(view){
+ return Object.hasOwn(bmzRules,view?.ruleMode)&&bmzLnSettings.includes(view.lnSetting)
+  ?view.ruleMode+'-'+view.lnSetting:null;
+}
+function bmzMode(view){
+ const ln=view.lnSetting.replace(/^(Auto|Force)(.+)$/,(_,mode,type)=>mode.toUpperCase()+' '+type.toUpperCase());
+ return bmzRules[view.ruleMode]+' / '+ln;
+}
+async function fetchPublishedJson(path,signal){
+ const response=await fetch(path,{cache:'no-store',signal});
+ if(response.status===404)return null;
+ if(!response.ok)throw Error('公開データの取得に失敗しました ('+response.status+')');
+ return response.json();
+}
+async function readBmzPublished(signal){
+ const manifest=await fetchPublishedJson('./data/bmz-index.json',signal);
+ if(!manifest)return {data:await fetchPublishedJson('./data/bmz.json',signal)};
+ const {schemaVersion,defaultMode,modes}=manifest;
+ if(schemaVersion!==1||!Array.isArray(modes)||modes.some(mode=>!bmzModeId(mode)||mode.id!==bmzModeId(mode))||
+    new Set(modes.map(mode=>mode.id)).size!==modes.length||!modes.some(mode=>mode.id===defaultMode)){
+  throw Error('BMZの表示設定一覧の形式が正しくありません。');
+ }
+ const requested=new URLSearchParams(location.search).get('mode');
+ const selected=modes.some(mode=>mode.id===requested)?requested:defaultMode;
+ const path=selected===defaultMode?'./data/bmz.json':'./data/bmz-modes/'+selected+'.json';
+ const data=await fetchPublishedJson(path,signal);
+ if(data?.player!=='bmz'||bmzModeId(data)!==selected)throw Error('選んだ表示設定のBMZデータを取得できません。');
+ return {data,modeState:{modes,defaultMode,selected,fallback:requested!==null&&requested!==selected}};
+}
+function showBmzModes(modeState){
+ const control=$('bmz-mode-control'),select=$('bmz-mode');
+ control.hidden=!modeState||modeState.modes.length<2;
+ select.replaceChildren(...(modeState?.modes??[]).map(mode=>option(mode.id,bmzMode(mode))));
+ if(modeState)select.value=modeState.selected;
+}
 function validate(x){
  if(!x||x.schemaVersion!==1||!Array.isArray(x.tables)||x.tables.length===0)throw Error('schemaVersion: 1 と、空でない tables 配列が必要です。');
  const maxLamp=lampPalette(x).length-1;
- if(x.player==='bmz'&&(!['Beatoraja','Lr2Oraja','Dx'].includes(x.ruleMode)||!['AutoLn','AutoCn','AutoHcn','ForceLn','ForceCn','ForceHcn'].includes(x.lnSetting)))throw Error('BMZの判定ルール・LN設定の形式が正しくありません。');
+ if(x.player==='bmz'&&!bmzModeId(x))throw Error('BMZの判定ルール・LN設定の形式が正しくありません。');
  const ids=new Set();for(const t of x.tables){if(typeof t.id!=='string'||!t.id||ids.has(t.id)||typeof t.name!=='string'||!Array.isArray(t.charts)||typeof t.symbol!=='string')throw Error('難易度表の形式が正しくありません。');if(t.levelOrder!==undefined&&(!Array.isArray(t.levelOrder)||!t.levelOrder.every(l=>typeof l==='string')))throw Error('レベル順の形式が正しくありません。');ids.add(t.id);const hashes=new Set();
  for(const c of t.charts){if(typeof c.md5!=='string'||!/^[a-f0-9]{32}$/i.test(c.md5)||hashes.has(c.md5.toLowerCase())||typeof c.title!=='string'||typeof c.level!=='string'||!Number.isInteger(c.lamp)||c.lamp<0||c.lamp>maxLamp||!(c.minBp===null||Number.isInteger(c.minBp)&&c.minBp>=0))throw Error('譜面の形式が正しくありません。MD5・レベル・ランプ・最小BPを確認してください。');if(!['exScore','totalNotes'].every(k=>c[k]===undefined||c[k]===null||Number.isInteger(c[k])&&c[k]>=0))throw Error('スコア・総ノーツ数の形式が正しくありません。');hashes.add(c.md5.toLowerCase());}}
  if(x.history!=null){if(!Array.isArray(x.history.days)||!Number.isInteger(x.history.excludedUnfinalized))throw Error('履歴の形式が正しくありません。');const dates=new Set();for(const d of x.history.days){if(typeof d.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(d.date)||dates.has(d.date)||!Array.isArray(d.entries)||!['plays','judgements','lampUpdates','bpUpdates'].every(k=>Number.isInteger(d[k])&&d[k]>=0)||!(Number.isInteger(d.seconds)&&d.seconds>=0||x.player==='bmz'&&x.history.durationAvailable===false&&d.seconds===null))throw Error('日別集計の形式が正しくありません。');dates.add(d.date);for(const e of d.entries){if(typeof e.title!=='string'||typeof e.time!=='string'||!(e.level===null||typeof e.level==='string')||!Number.isInteger(e.judgements)||e.judgements<0||typeof e.lampUpdated!=='boolean'||typeof e.bpUpdated!=='boolean'||(e.tableLabels!==undefined&&(!Array.isArray(e.tableLabels)||!e.tableLabels.every(l=>typeof l==='string'))))throw Error('プレイ履歴の形式が正しくありません。')}}}
  if(x.history?.detailsVersion===2){for(const d of x.history.days){if(!['notes','notesMissingPlays','scoreUpdates'].every(k=>Number.isInteger(d[k])&&d[k]>=0))throw Error('総ノーツ数・更新集計の形式が正しくありません。');for(const e of d.entries){if(!/^[a-f0-9]{32}$/i.test(e.chartId)||!Number.isInteger(e.plays)||e.plays<0||!['oldLamp','newLamp'].every(k=>Number.isInteger(e[k])&&e[k]>=0&&e[k]<=maxLamp)||!['totalNotes','notes','oldMinBp','newMinBp','oldExScore','newExScore','oldTotalNotes'].every(k=>e[k]===null||Number.isInteger(e[k])&&e[k]>=0)||typeof e.scoreUpdated!=='boolean')throw Error('総ノーツ数・更新履歴の形式が正しくありません。')}}}
  return x;
 }
-function viewKey(){return `lr2-score-viewer:view:${new URL('.',location.href).pathname}:${data.demo?'demo':data.player==='bmz'?'bmz':'scores'}`}
+function viewKey(){
+ const key=data.player==='bmz'
+  ?(data.demo?'bmz-demo':activeBmzMode&&defaultBmzMode&&activeBmzMode!==defaultBmzMode?'bmz:'+activeBmzMode:'bmz')
+  :(data.demo?'demo':'scores');
+ return `lr2-score-viewer:view:${new URL('.',location.href).pathname}:${key}`;
+}
 function readView(){try{const saved=JSON.parse(localStorage.getItem(viewKey()));return saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:null}catch{return null}}
 function saveView(){try{localStorage.setItem(viewKey(),JSON.stringify({tableId:$('table').value,query:$('query').value,level:$('level').value,lamp:$('lamp').value,sort:$('sort').value}))}catch{}}
 function selectValue(id,value){if(typeof value==='string'&&[...$(id).options].some(o=>o.value===value))$(id).value=value}
 function restoreView(){const saved=readView();$('query').value='';$('lamp').value='';$('sort').value='level';if(saved&&data.tables.some(t=>t.id===saved.tableId)){$('table').value=saved.tableId;if(typeof saved.query==='string')$('query').value=saved.query;selectValue('lamp',saved.lamp);selectValue('sort',saved.sort);selectTable(saved.level)}else selectTable()}
 function updateView(){render();saveView()}
 function showLampCharts(level,lamp){$('query').value='';selectValue('level',level);selectValue('lamp',String(lamp));updateView();location.hash='charts';$('charts-title').focus({preventScroll:true});$('charts').scrollIntoView({block:'start'})}
-function load(x,published=false){
+function load(x,published=false,modeState=null){
  data=validate(x);
+ activeBmzMode=modeState?.selected??null;
+ defaultBmzMode=modeState?.defaultMode??null;
+ showBmzModes(modeState);
  publishedView=published&&!data.demo&&!!data.history&&['https:','http:'].includes(location.protocol);
  for(const prefix of ['daily','sheet'])$(prefix+'-share').hidden=!publishedView;
  clearDailyShare();
@@ -107,6 +153,7 @@ function load(x,published=false){
  markPlayer(data.demo?requestedPlayer:bmz?'bmz':'lr2');
  document.title=bmz?'My Score · BMZ':'My Score';
  $('status').textContent=data.demo?'デモ表示中 — 架空の譜面・スコアです。':`${bmz?'BMZ · '+bmzMode(data):'LR2'} / データ出力日時: ${typeof data.generatedAt==='string'?data.generatedAt.replace('T',' '):'不明'}`;
+ if(modeState?.fallback)$('status').append(' ／ リンク先の表示設定は公開されていないため、初期設定を表示しています。');
  $('lr2-history-help').hidden=bmz;$('bmz-history-help').hidden=!bmz;
  $('lamp').replaceChildren(option('','すべて'),...palette.map(([label],i)=>option(String(i),label)));
  $('legend').replaceChildren(...lampOrder(palette).map(i=>{const [label,color]=palette[i],item=node('span'),dot=node('span',undefined,'dot');dot.style.background=color;item.append(dot,document.createTextNode(label));return item}));
@@ -124,10 +171,11 @@ function validDailyDate(date){
  const stamp=new Date(date+'T00:00:00Z');
  return Number.isFinite(stamp.getTime())&&stamp.toISOString().slice(0,10)===date;
 }
-function dailyLink(page,player,date,mode){
+function dailyLink(page,player,date,mode,bmzMode=null){
  const url=new URL(page);url.search='';url.hash='daily';
  url.searchParams.set('player',player==='bmz'?'bmz':'lr2');
  url.searchParams.set('date',date);
+ if(player==='bmz'&&bmzMode)url.searchParams.set('mode',bmzMode);
  if(mode==='all'||mode==='lamps')url.searchParams.set('dailyView',mode);
  return url.href;
 }
@@ -137,7 +185,7 @@ function clearDailyShare(){
 }
 async function copyDailyShare(prefix,mode){
  const date=$('day').value;if(!publishedView||!validDailyDate(date))return;
- const url=dailyLink(location.href,data.player,date,mode),status=$(prefix+'-share-status'),input=$(prefix+'-share-url');
+ const url=dailyLink(location.href,data.player,date,mode,activeBmzMode),status=$(prefix+'-share-status'),input=$(prefix+'-share-url');
  clearDailyShare();
  const revision=shareRevision;
  try{await navigator.clipboard.writeText(url);if(revision===shareRevision)status.textContent='日付付きリンクをコピーしました。'}
@@ -241,6 +289,13 @@ function render(){const t=current(),palette=lampPalette(data),graphLampOrder=lam
  if(!charts.length){const row=node('tr'),td=node('td','条件に一致する譜面がありません。','empty');td.colSpan=5;row.append(td);$('rows').append(row)}
 }
 $('table').addEventListener('change',()=>{$('query').value='';$('lamp').value='';selectTable();saveView()});['level','lamp','sort'].forEach(id=>$(id).addEventListener('change',updateView));$('query').addEventListener('input',updateView);$('demo').addEventListener('click',()=>{manualDataSelected=true;load(sample())});
+$('bmz-mode').addEventListener('change',e=>{
+ const url=new URL(location.href);
+ url.searchParams.set('player','bmz');
+ url.searchParams.set('mode',e.target.value);
+ if((url.hash==='#daily'||url.searchParams.has('date'))&&validDailyDate($('day').value))url.searchParams.set('date',$('day').value);
+ location.assign(url.href);
+});
 $('day').addEventListener('change',()=>{renderHistory();selectValue('month',$('day').value.slice(0,7));renderMonth()});
 $('month').addEventListener('change',renderMonth);$('month-prev').addEventListener('click',()=>moveMonth(1));$('month-next').addEventListener('click',()=>moveMonth(-1));
 $('file').addEventListener('change',async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>25*1024*1024)throw Error('JSONは25MB以下にしてください。');load(JSON.parse(await file.text()));manualDataSelected=true}catch(err){$('error').textContent=`読み込みエラー: ${err.message}`;$('error').hidden=false}finally{e.target.value=''}});
@@ -256,10 +311,12 @@ if(waitForPublished){
 // データ未配置時は、明示したデモ表示を維持します。
 if(location.protocol==='https:'||location.protocol==='http:'){
  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),10000);
- fetch(requestedPlayer==='bmz'?'./data/bmz.json':'./data/viewer.json',{cache:'no-store',signal:controller.signal}).then(async response=>{
-  if(response.status===404){if(!manualDataSelected&&waitForPublished)$('status').textContent=requestedLabel+'の公開データはまだありません。閲覧用JSONを開くこともできます。';return;}
-  if(!response.ok)throw Error(`公開データの取得に失敗しました (${response.status})`);
-  const published=await response.json();if(!manualDataSelected)load(published,true);
+ const published=requestedPlayer==='bmz'?readBmzPublished(controller.signal)
+  :fetchPublishedJson('./data/viewer.json',controller.signal).then(data=>({data}));
+ published.then(result=>{
+  if(manualDataSelected)return;
+  if(result.data===null){if(waitForPublished)$('status').textContent=requestedLabel+'の公開データはまだありません。閲覧用JSONを開くこともできます。';return}
+  load(result.data,true,result.modeState);
  }).catch(err=>{if(manualDataSelected)return;if(waitForPublished)$('status').textContent=requestedLabel+'の公開データを読み込めませんでした。';$('error').textContent=`公開データを表示できません: ${err.message}`;$('error').hidden=false}).finally(()=>clearTimeout(timeout));
 }
 </script>

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import sqlite3
 
-from export_bmz import LN_SETTINGS, RULES, read_database
+from export_bmz import configured_modes, read_database
 
 
 def check_config(config, lr2, bmz, backup_only=False):
@@ -19,23 +19,21 @@ def check_config(config, lr2, bmz, backup_only=False):
         section = config['bmz']
         if not isinstance(section, dict):
             raise ValueError('bmzは設定項目を持つオブジェクトにしてください。')
+        modes = [] if backup_only else configured_modes(section)
         with read_database(section['scoreDatabase']) as db:
             db.execute('SELECT id FROM score_history LIMIT 0')
-            if not backup_only:
-                rule = section.get('ruleMode', 'Beatoraja')
-                ln = section.get('lnSetting', 'AutoLn')
-                if rule not in RULES or ln not in LN_SETTINGS:
-                    raise ValueError('bmz.ruleModeまたはbmz.lnSettingが無効です。')
-                count = db.execute("SELECT COUNT(*) FROM score_best WHERE rule_mode=? AND double_option='Off'",
-                                   (rule,)).fetchone()[0]
-            else:
-                db.execute('SELECT chart_sha256 FROM score_best LIMIT 0')
-        if not backup_only:
+            db.execute('SELECT chart_sha256 FROM score_best LIMIT 0')
+            if modes:
+                rules_with_scores = {row[0] for row in db.execute(
+                    "SELECT DISTINCT rule_mode FROM score_best WHERE double_option='Off'")}
+        if modes:
             with read_database(section['libraryDatabase']) as db:
                 db.execute('SELECT sha256, md5, has_undefined_ln, has_defined_ln, has_defined_cn, has_defined_hcn FROM charts LIMIT 0')
-            print(f'BMZ: スコアDB・曲情報DBを確認しました。設定: {rule} / {ln}')
-            if not count:
-                print('注意: この判定ルールに通常プレイのベストがありません。使っているプロファイルと判定ルールを確認してください。')
+            settings = ', '.join(mode['id'] for mode in modes)
+            print(f'BMZ: スコアDB・曲情報DBを確認しました。設定: {settings}')
+            missing = sorted({mode['ruleMode'] for mode in modes} - rules_with_scores)
+            if missing:
+                print(f'注意: 通常プレイのベストがない判定ルール: {", ".join(missing)}')
         else:
             print('BMZ: スコアDBを確認しました。')
     destinations = [config.get('backupDirectory') if lr2 else None,

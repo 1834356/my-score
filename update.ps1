@@ -58,11 +58,23 @@ try {
         if ($dataPaths -contains 'data/viewer.json') { $bmzArgs += @('--tables', (Join-Path $PSScriptRoot 'data/viewer.json')) }
         python -X utf8 (Join-Path $PSScriptRoot 'export_bmz.py') @bmzArgs
         if ($LASTEXITCODE -ne 0) { throw 'BMZデータの出力に失敗したため、同期しません。' }
-        $dataPaths += 'data/bmz.json'
+        $dataPaths += @('data/bmz.json', 'data/bmz-index.json')
+        if ($Push) {
+            $modePattern = '^data/bmz-modes/(Beatoraja|Lr2Oraja|Dx)-(Auto|Force)(Ln|Cn|Hcn)\.json$'
+            $modePaths = git ls-files --cached --others --exclude-standard -- data/bmz-modes/
+            if ($LASTEXITCODE -ne 0) { throw 'BMZの追加モードの公開ファイルを確認できませんでした。' }
+            $dataPaths += @($modePaths | Where-Object { $_ -cmatch $modePattern })
+        }
     }
     if ($Push) {
-        git add -- @dataPaths
+        git add -A -- @dataPaths
         if ($LASTEXITCODE -ne 0) { throw 'git addに失敗しました。' }
+        if ($runBmz) {
+            # Include modes removed from the index, including on a retry after staging.
+            $removedModePaths = git diff --cached --name-only --diff-filter=D -- data/bmz-modes/
+            if ($LASTEXITCODE -ne 0) { throw 'BMZの追加モードの前回の公開ファイルを確認できませんでした。' }
+            $dataPaths = @(($dataPaths + @($removedModePaths | Where-Object { $_ -cmatch $modePattern })) | Sort-Object -Unique)
+        }
         git diff --cached --quiet -- @dataPaths
         if ($LASTEXITCODE -eq 1) {
             git commit --only -m 'Update BMS score data' -- @dataPaths

@@ -1,10 +1,11 @@
 from contextlib import closing
 from pathlib import Path
+import json
 import sqlite3
 import tempfile
 import unittest
 
-from export_bmz import JUDGES, build_bmz, ln_policy
+from export_bmz import JUDGES, build_bmz, configured_modes, export_modes, ln_policy
 
 
 class BmzExportTests(unittest.TestCase):
@@ -15,6 +16,13 @@ class BmzExportTests(unittest.TestCase):
         self.assertEqual(ln_policy('AutoHcn', chart | {'has_undefined_ln': 1}), 'ForceHcn')
         self.assertEqual(ln_policy('AutoHcn', chart | {'has_defined_cn': 1, 'has_undefined_ln': 1}), 'AutoHcn')
         self.assertEqual(ln_policy('AutoHcn', chart | {'has_defined_cn': 1, 'has_defined_ln': 1}), 'AutoLn')
+
+    def test_mode_configuration_rejects_invalid_and_duplicate_pairs(self):
+        self.assertEqual([m['id'] for m in configured_modes({})], ['Beatoraja-AutoLn'])
+        for additional in (None, ['ForceCn'], [{'ruleMode': 'Lr2Oraja', 'lnSetting': 'Cn'}],
+                           [{'ruleMode': 'Beatoraja', 'lnSetting': 'AutoLn'}]):
+            with self.subTest(additional=additional), self.assertRaises(ValueError):
+                configured_modes({'additionalModes': additional})
 
     def test_bests_and_only_local_plays_are_exported(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -105,6 +113,25 @@ class BmzExportTests(unittest.TestCase):
             self.assertEqual((restored_day['plays'], restored_day['notes']), (3, 300))
             self.assertNotIn('private-account', str(restored))
             self.assertNotIn('remote-5', str(restored))
+            output = Path(folder) / 'bmz.json'
+            config = {'scoreDatabase': scores, 'libraryDatabase': library,
+                      'ruleMode': 'Lr2Oraja', 'lnSetting': 'ForceLn'}
+            extra = {'ruleMode': 'Lr2Oraja', 'lnSetting': 'ForceCn'}
+            alternate = output.parent / 'bmz-modes/Lr2Oraja-ForceCn.json'
+            index_path = output.with_name('bmz-index.json')
+            export_modes(config | {'additionalModes': [extra]}, tables, output)
+            index = json.loads(index_path.read_text(encoding='utf-8'))
+            self.assertEqual(index['defaultMode'], 'Lr2Oraja-ForceLn')
+            self.assertEqual([m['id'] for m in index['modes']], ['Lr2Oraja-ForceLn', 'Lr2Oraja-ForceCn'])
+            default = json.loads(output.read_text(encoding='utf-8'))
+            cn = json.loads(alternate.read_text(encoding='utf-8'))
+            self.assertEqual(default['tables'][0]['charts'][0]['exScore'], 180)
+            self.assertEqual(cn['tables'][0]['charts'][0]['exScore'], 230)
+            self.assertEqual(cn['history']['days'][0]['notes'], 115)
+            export_modes(config, tables, output)
+            self.assertFalse(alternate.exists())
+            self.assertEqual(len(json.loads(index_path.read_text(encoding='utf-8'))['modes']), 1)
+
             for path, content in before.items():
                 self.assertEqual(path.read_bytes(), content)
 
