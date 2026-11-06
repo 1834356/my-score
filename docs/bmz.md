@@ -8,6 +8,7 @@ My Scoreの上部で「LR2」と「BMZ」を切り替えます。BMZは `?player
 "bmz": {
   "scoreDatabase": "D:/your-bmz/data/profiles/default/score.db",
   "libraryDatabase": "D:/your-bmz/data/library.db",
+  "backupDirectory": "D:/BMSbackup/bmz",
   "ruleMode": "Lr2Oraja",
   "lnSetting": "ForceLn"
 }
@@ -15,8 +16,10 @@ My Scoreの上部で「LR2」と「BMZ」を切り替えます。BMZは `?player
 
 `ruleMode` は `Beatoraja`、`Lr2Oraja`、`Dx`、`lnSetting` は `AutoLn`、`AutoCn`、`AutoHcn`、`ForceLn`、`ForceCn`、`ForceHcn` が使えます。BATTLE用の記録は集計しません。
 
-通常は `update-and-backup.cmd` で従来どおりLR2をバックアップし、両方の公開データを更新します。BMZだけ更新する場合は、難易度表の取得を省いて保存済みの表を使う `powershell -NoProfile -File .\update.ps1 -BmzOnly -Push` を実行してください。
+通常は `update-and-backup.cmd` で設定したバックアップを保存し、両方の公開データを更新します。`.\update.ps1 -CheckOnly -Push` はDB・ブランチ・送信先の確認だけを行います。BMZだけ更新する場合は `.\update.ps1 -BmzOnly -Push`、BMZのバックアップだけ取る場合は `.\update.ps1 -BmzOnly -BackupOnly` を実行してください。
 
-難易度表のベストにはBMZに取り込んだスコアも反映します。日別・月別は選択した設定で履歴が保存されたBMZの単曲プレイだけを集計します。他のプレイヤーから取り込んだ履歴、IR取り込み元と紐づく履歴、オートプレイ、コースは除きます。日別・月別の演奏時間はBMZの履歴から取得できません。
+難易度表のベストにはBMZに取り込んだスコアも反映します。日別・月別は選択した設定で履歴が保存されたBMZの単曲プレイを集計します。IRと紐づく履歴は、このPCから取り込み前に送信した証拠がある場合だけ含めます。既定ではスコアDBと同じフォルダの `network.db` を読み、別の場所なら `bmz.networkDatabase` を設定します。日ごとの演奏時間はBMZの履歴から取得できません。
+
+日別記録の「日付リンクをコピー」で、選択したプレイヤーと日付を開くURLを取得できます。1画面表示の「リンクをコピー」では、全更新／ランプ更新のみも指定できます。
 
 元DBは読み取り専用で開きます。GitHubに公開するのは閲覧用JSONで、DB、設定、リプレイ、認証情報は含めません。

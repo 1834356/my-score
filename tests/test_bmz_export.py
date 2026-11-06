@@ -36,7 +36,8 @@ class BmzExportTests(unittest.TestCase):
                     ex_score INTEGER, total_notes INTEGER, played_at INTEGER, old_clear_type TEXT,
                     old_bp INTEGER, old_ex_score INTEGER, autoplay INTEGER, source_kind TEXT,
                     course_score_id INTEGER, {judges})''')
-                db.execute('CREATE TABLE score_history_sources(score_history_id INTEGER, account_id TEXT)')
+                db.execute('''CREATE TABLE score_history_sources(score_history_id INTEGER, source TEXT,
+                    provider TEXT, account_id TEXT, remote_score_id TEXT, imported_at INTEGER)''')
                 db.executemany('INSERT INTO score_best VALUES(?,?,?,?,?,?,?,?)', [
                     (sha, 'ForceLn', 'Off', 'Lr2Oraja', 'ExHard', 180, 0, 1),
                     (sha, 'ForceCn', 'Off', 'Lr2Oraja', 'Max', 230, 0, 2),
@@ -52,13 +53,17 @@ class BmzExportTests(unittest.TestCase):
                     (7, 'ForceLn', 'Off', 'Lr2Oraja', 'Hard', 16, 170, 100, None, None, None, 0, 'Local', 1),
                     (8, 'ForceLn', 'Battle', 'Lr2Oraja', 'Max', 0, 200, 100, None, None, None, 0, 'Local', None),
                     (9, 'ForceLn', 'Off', 'Lr2Oraja', 'Failed', 40, 140, 100, 'ExHard', 0, 180, 0, 'Local', None),
+                    (10, 'ForceLn', 'Off', 'Lr2Oraja', 'Hard', 16, 170, 100, None, None, None, 0, 'Local', None),
                 ]
                 for ident, policy, double, rule, lamp, bp, ex, notes, old_lamp, old_bp, old_ex, auto, source, course in rows:
                     db.execute('''INSERT INTO score_history(id,chart_sha256,ln_policy,double_option,rule_mode,
                         clear_type,bp,ex_score,total_notes,played_at,old_clear_type,old_bp,old_ex_score,autoplay,
                         source_kind,course_score_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                         (ident,sha,policy,double,rule,lamp,bp,ex,notes,1735686000+ident,old_lamp,old_bp,old_ex,auto,source,course))
-                db.execute("INSERT INTO score_history_sources VALUES(5,'private-account')")
+                db.executemany('INSERT INTO score_history_sources VALUES(?,?,?,?,?,?)', [
+                    (5, 'bmz_ir', 'fixture', 'private-account', 'remote-5', 1735686100),
+                    (10, 'bmz_ir', 'fixture', 'private-account', 'remote-10', 1735686100),
+                ])
             before = {p: p.read_bytes() for p in (library, scores)}
             tables = {'tables': [
                 {'id': 'a', 'name': 'A', 'symbol': '★', 'charts': [
@@ -82,6 +87,24 @@ class BmzExportTests(unittest.TestCase):
             self.assertEqual(improved['title'], 'Library title [7K]')
             self.assertNotIn('private-account', str(payload))
             self.assertNotIn('do-not-publish', str(payload))
+            network = scores.with_name('network.db')
+            with closing(sqlite3.connect(network)) as db, db:
+                db.execute('''CREATE TABLE ir_score_success_ledger(kind TEXT, local_score_id INTEGER,
+                    provider TEXT, account_id TEXT, remote_score_id TEXT, submitted_at INTEGER)''')
+                db.execute('''CREATE TABLE ir_score_jobs(kind TEXT, local_score_id INTEGER, provider TEXT,
+                    account_id TEXT, chart_sha256 TEXT, created_at INTEGER)''')
+                db.executemany('INSERT INTO ir_score_success_ledger VALUES(?,?,?,?,?,?)', [
+                    ('score', 5, 'fixture', 'private-account', 'remote-5', 1735686080),
+                    ('score', 10, 'fixture', 'other-account', 'remote-10', 1735686080),
+                ])
+                db.execute("INSERT INTO ir_score_jobs VALUES('score',10,'fixture','private-account',?,1735686200)", (sha,))
+            before[network] = network.read_bytes()
+            restored = build_bmz({'scoreDatabase': scores, 'libraryDatabase': library,
+                                  'ruleMode': 'Lr2Oraja', 'lnSetting': 'ForceLn'}, tables)
+            restored_day, = restored['history']['days']
+            self.assertEqual((restored_day['plays'], restored_day['notes']), (3, 300))
+            self.assertNotIn('private-account', str(restored))
+            self.assertNotIn('remote-5', str(restored))
             for path, content in before.items():
                 self.assertEqual(path.read_bytes(), content)
 

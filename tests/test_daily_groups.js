@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
-const context=vm.createContext({});
+const context=vm.createContext({URL});
 vm.runInContext(html.split('\n').find(line=>line.startsWith('const lamps=')),context);
 for(const name of ['dailyChanges','reachedAAA','scoreRate','lampCounts','monthsFor','calendarDates','monthSummary','sheetChunks','sheetImageSize','imageEllipsis']){
   const definition=html.split('\n').find(line=>line.startsWith(`function ${name}(`));
@@ -38,6 +38,15 @@ assert.equal(context.scoreRate(10,0),null);
 assert.equal(context.scoreRate(undefined,100),null);
 assert.deepEqual(Array.from(context.lampCounts([{lamp:2},{lamp:2},{lamp:0},{lamp:6}])),[1,0,2,0,0,0,1]);
 console.log('Daily grouping, score rate, and lamp breakdown checks passed');
+
+vm.runInContext(html.slice(html.indexOf('function validDailyDate('),html.indexOf('function clearDailyShare(')),context);
+assert.equal(context.validDailyDate('2024-02-29'),true);
+assert.equal(context.validDailyDate('2025-02-29'),false);
+assert.equal(context.validDailyDate('2026-11-6'),false);
+assert.equal(context.dailyLink('https://example.test/score/?v=old#charts','bmz','2026-11-06','lamps'),
+ 'https://example.test/score/?player=bmz&date=2026-11-06&dailyView=lamps#daily');
+assert.equal(context.dailyLink('https://example.test/score/?dailyView=all','lr2','2026-11-06'),
+ 'https://example.test/score/?player=lr2&date=2026-11-06#daily');
 
 assert.deepEqual(Array.from(context.monthsFor([{date:'2024-12-31'},{date:'2025-02-01'}],'2025-03-01T12:00:00+09:00')),['2025-03','2025-02','2025-01','2024-12']);
 assert.deepEqual(Array.from(context.monthsFor([],null)),[]);

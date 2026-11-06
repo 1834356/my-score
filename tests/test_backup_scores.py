@@ -10,6 +10,27 @@ backup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backup)
 
 class BackupTests(unittest.TestCase):
+    def test_bmz_backup_preserves_profile_and_history(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            profile = root/'profile-b'
+            profile.mkdir()
+            source = profile/'score.db'
+            with sqlite3.connect(source) as writer:
+                writer.execute('CREATE TABLE score_best(bp INTEGER)')
+                writer.execute('CREATE TABLE score_history(id INTEGER)')
+                writer.execute('INSERT INTO score_best VALUES(3)')
+                writer.execute('INSERT INTO score_history VALUES(1)')
+            writer.close()
+            folder = root/'backups'
+            saved = backup.backup_database(source, folder, player='bmz')
+            self.assertTrue(saved.name.startswith('bmz_profile-b_score_'))
+            self.assertIsNone(backup.backup_database(source, folder, player='bmz'))
+            with sqlite3.connect(saved) as reader:
+                self.assertEqual(reader.execute('SELECT bp FROM score_best').fetchone(), (3,))
+                self.assertEqual(reader.execute('SELECT id FROM score_history').fetchone(), (1,))
+            reader.close()
+
     def test_wal_snapshot_and_existing_backups_preserved(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             root = Path(directory)

@@ -122,6 +122,43 @@ def make_history(rows, charts, memberships, setting):
     }
 
 
+def local_ir_history(config, scores, linked_rows):
+    """Return locally submitted history IDs, without publishing any IR metadata."""
+    if not linked_rows:
+        return set()
+    path = config.get('networkDatabase') or Path(config['scoreDatabase']).with_name('network.db')
+    if not Path(path).is_file():
+        return set()
+    linked = {row['id']: row['chart_sha256'] for row in linked_rows}
+    confirmed = set()
+    with read_database(path) as network:
+        tables = {r['name'] for r in network.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if not tables.intersection(('ir_score_success_ledger', 'ir_score_jobs')):
+            return confirmed
+        for link in scores.execute("""SELECT score_history_id, provider, account_id, remote_score_id, imported_at
+                                      FROM score_history_sources WHERE source='bmz_ir'"""):
+            ident = link['score_history_id']
+            if ident not in linked or ident in confirmed:
+                continue
+            # A matching successful submission identifies the same remote score.
+            if 'ir_score_success_ledger' in tables and link['remote_score_id'] and network.execute("""
+                SELECT 1 FROM ir_score_success_ledger
+                WHERE kind='score' AND local_score_id=? AND provider=? AND account_id=?
+                      AND remote_score_id=? AND submitted_at<=? LIMIT 1
+            """, (ident, link['provider'], link['account_id'], link['remote_score_id'], link['imported_at'])).fetchone():
+                confirmed.add(ident)
+                continue
+            # A job for this history already existed before the IR download.
+            # This also covers a local submission with a lost response.
+            if 'ir_score_jobs' in tables and network.execute("""
+                SELECT 1 FROM ir_score_jobs
+                WHERE kind='score' AND local_score_id=? AND provider=? AND account_id=?
+                      AND chart_sha256=? AND created_at<? LIMIT 1
+            """, (ident, link['provider'], link['account_id'], linked[ident], link['imported_at'])).fetchone():
+                confirmed.add(ident)
+    return confirmed
+
+
 def build_bmz(config, table_data):
     rule = config.get('ruleMode', 'Beatoraja')
     setting = config.get('lnSetting', 'AutoLn')
@@ -137,17 +174,17 @@ def build_bmz(config, table_data):
             WHERE b.rule_mode = ? AND b.double_option = 'Off'
         ''', (rule,)).fetchall()
         judges = ','.join(f'h.{side}_{judge}' for judge in JUDGES for side in ('fast', 'slow'))
-        # IR downloads can also carry source_kind='Local'. Do not count rows
-        # linked to an import source as new plays on this profile.
         history_rows = db.execute(f'''
-            SELECT h.chart_sha256, h.ln_policy, h.played_at, h.clear_type, h.bp, h.ex_score,
-                   h.total_notes, h.old_clear_type, h.old_bp, h.old_ex_score, {judges}
+            SELECT h.id, h.chart_sha256, h.ln_policy, h.played_at, h.clear_type, h.bp, h.ex_score,
+                   h.total_notes, h.old_clear_type, h.old_bp, h.old_ex_score, {judges},
+                   EXISTS (SELECT 1 FROM score_history_sources s WHERE s.score_history_id=h.id) AS ir_linked
             FROM score_history h
             WHERE h.rule_mode = ? AND h.double_option = 'Off' AND h.autoplay = 0
                 AND h.source_kind = 'Local' AND h.course_score_id IS NULL
-                AND NOT EXISTS (SELECT 1 FROM score_history_sources s WHERE s.score_history_id = h.id)
             ORDER BY h.played_at, h.id
         ''', (rule,)).fetchall()
+        confirmed = local_ir_history(config, db, [r for r in history_rows if r['ir_linked']])
+        history_rows = [r for r in history_rows if not r['ir_linked'] or r['id'] in confirmed]
     with read_database(config['libraryDatabase']) as db:
         charts = load_charts(db, {r['chart_sha256'] for rows in (bests, history_rows) for r in rows})
 

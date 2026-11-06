@@ -25,6 +25,8 @@
 
 .sheet-toolbar-actions{display:flex;gap:8px;margin-left:auto}.sheet-toolbar button:disabled{opacity:.55;cursor:wait}.sheet-image-status{font-size:12px;line-height:1.5;margin:0;color:var(--muted)}.sheet-image-status:empty{display:none}@media(max-width:650px){.sheet-toolbar-actions{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-left:0;order:2}.sheet-toolbar-actions button{min-width:0;min-height:44px;font-size:12px;padding:8px 6px}.sheet-image-status{font-size:11px}}
 .player-switch{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:20px}.player-switch a{border:1px solid var(--line);border-radius:8px;color:var(--text);text-decoration:none;padding:9px 15px;min-height:44px;display:inline-flex;align-items:center}.player-switch a[aria-current="page"]{border-color:var(--accent);background:#20392f;color:var(--accent)}.player-switch a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.daily-share-output{margin:0 0 8px;color:var(--muted);font-size:12px}.daily-share-output:empty{display:none}.share-url{display:block;width:100%;font:inherit;padding:7px 10px}.share-url[hidden],#daily-share[hidden],#sheet-share[hidden]{display:none}
+@media(max-width:650px){.sheet-toolbar-actions:has(#sheet-share:not([hidden])){grid-template-columns:repeat(3,minmax(0,1fr))}}
 </style>
 <main>
 <header><div><div class="eyebrow">PERSONAL BMS RECORD</div><h1>My Score</h1><div class="muted">難易度表ごとのランプ・最小BP・スコアレート</div></div><div><label class="file-button">閲覧用JSONを開く<input id="file" type="file" accept=".json,application/json"></label> <button id="demo">デモ</button> <button id="app-refresh" type="button">最新版を読み込む</button></div></header>
@@ -43,7 +45,8 @@
 <p class="muted calendar-hint">日付を押すと日別記録へ移動します。「—」は記録なし、または総ノーツ数未取得です。ログに記録された全譜面を集計します。</p>
 </div></section>
 <section id="daily" class="card"><div class="daily-section-heading"><h2>日別記録</h2><button id="daily-refresh" type="button">最新版を読み込む</button></div><p id="history-status" class="muted"></p><div id="history-content" hidden>
-<div class="daily-controls"><label>日付（日本時間） <select id="day"></select></label><div class="daily-actions"><button id="daily-fit" type="button" aria-haspopup="dialog">1画面表示（スクリーンショット用）</button><button id="daily-fit-lamps" type="button" aria-haspopup="dialog">ランプ更新のみを1画面表示</button></div></div>
+<div class="daily-controls"><label>日付（日本時間） <select id="day"></select></label><div class="daily-actions"><button id="daily-fit" type="button" aria-haspopup="dialog">1画面表示（スクリーンショット用）</button><button id="daily-fit-lamps" type="button" aria-haspopup="dialog">ランプ更新のみを1画面表示</button><button id="daily-share" type="button" hidden>日付リンクをコピー</button></div></div>
+<p id="daily-share-status" class="daily-share-output" role="status"></p><input id="daily-share-url" class="share-url" aria-label="日別記録の共有URL" readonly hidden>
 <div class="daily-heading"><h3 id="day-title" tabindex="-1"></h3><p class="daily-note-count">打鍵数（総ノーツ数）: <strong id="day-notes"></strong></p><small id="day-notes-status"></small></div>
 <div class="metrics"><div class="metric"><small>プレイ数</small><strong id="day-plays"></strong></div><div class="metric"><small>演奏時間</small><strong id="day-time"></strong></div><div class="metric"><small>ランプ更新 / BP改善</small><strong id="day-updates"></strong></div><div class="metric"><small>スコア更新</small><strong id="day-score-updates"></strong></div></div>
 <p class="daily-hint">更新一覧は、同じ譜面のその日の変更をまとめて表示します。長い曲名は省略し、曲名を押すとBMS-IRの譜面ページを別タブで開きます。</p><div id="daily-groups" class="daily-groups"></div>
@@ -53,7 +56,8 @@
 </div>
 </main>
 <dialog id="daily-sheet" aria-label="日別記録の1画面表示">
-<div class="sheet-toolbar"><label>日付 <select id="sheet-day"></select></label><label>表示 <select id="sheet-filter"><option value="all">すべての更新</option><option value="lamps">ランプ更新のみ</option></select></label><small id="sheet-status" role="status"></small><div class="sheet-toolbar-actions"><button id="sheet-save" type="button" disabled>画像を準備中…</button><button id="sheet-close" type="button" autofocus>通常表示へ戻る</button></div></div><p id="sheet-image-status" class="sheet-image-status" role="status"></p>
+<div class="sheet-toolbar"><label>日付 <select id="sheet-day"></select></label><label>表示 <select id="sheet-filter"><option value="all">すべての更新</option><option value="lamps">ランプ更新のみ</option></select></label><small id="sheet-status" role="status"></small><div class="sheet-toolbar-actions"><button id="sheet-save" type="button" disabled>画像を準備中…</button><button id="sheet-share" type="button" hidden>リンクをコピー</button><button id="sheet-close" type="button" autofocus>通常表示へ戻る</button></div></div><p id="sheet-image-status" class="sheet-image-status" role="status"></p>
+<p id="sheet-share-status" class="daily-share-output" role="status"></p><input id="sheet-share-url" class="share-url" aria-label="1画面表示の共有URL" readonly hidden>
 <div id="sheet-viewport" class="sheet-viewport"><article id="sheet-page" class="sheet-page" aria-label="スクリーンショット用の日別記録"></article></div>
 </dialog>
 <script>
@@ -62,7 +66,7 @@ const lamps=[['NO PLAY','#526174'],['FAILED','#e77482'],['EASY','#69d8aa'],['CLE
 const bmzLamps=[lamps[0],lamps[1],['ASSIST','#bc8ae8'],['L-ASSIST','#aab5ee'],lamps[2],lamps[3],lamps[4],['EX HARD','#f494aa'],lamps[5],lamps[6],['MAX','#f7df77']];
 const requestedPlayer=new URLSearchParams(location.search).get('player')==='bmz'?'bmz':'lr2';
 const $=id=>document.getElementById(id);
-let data,manualDataSelected=false;
+let data,manualDataSelected=false,publishedView=false,shareRevision=0;
 const collator=new Intl.Collator('ja',{numeric:true});
 function scoreRate(score,notes){return Number.isInteger(score)&&score>=0&&Number.isInteger(notes)&&notes>0?score/(notes*2)*100:null}
 function lampCounts(charts,palette=lamps){const counts=palette.map(()=>0);for(const c of charts)counts[c.lamp]++;return counts}
@@ -75,7 +79,7 @@ function sampleHistory(){return {detailsVersion:2,excludedUnfinalized:0,days:['2
 function sample(){return {schemaVersion:1,demo:true,generatedAt:null,history:sampleHistory(),tables:[{id:'sample-a',name:'サンプル難易度表 A',symbol:'★',charts:Array.from({length:48},(_,i)=>({md5:i.toString(16).padStart(32,'0'),level:String(Math.floor(i/8)+1),title:`サンプル譜面 ${String(i+1).padStart(2,'0')}`,lamp:i%7,minBp:i%7===0?null:i%7>=5?0:Math.max(1,70-i),exScore:i%7===0?null:1800-i*3,totalNotes:i%7===0?null:1000}))},{id:'sample-b',name:'サンプル難易度表 B',symbol:'sl',charts:Array.from({length:12},(_,i)=>({md5:(100+i).toString(16).padStart(32,'0'),level:String(Math.floor(i/4)),title:`別表のサンプル譜面 ${i+1}`,lamp:i%5,minBp:i%5===0?null:80-i*3,exScore:i%5===0?null:1500-i*5,totalNotes:i%5===0?null:1000}))}]}}
 function lampPalette(view){return view?.player==='bmz'?bmzLamps:lamps}
 function lampOrder(palette){return palette.map((_,i)=>i).reverse()}
-function markPlayer(player){for(const id of ['lr2','bmz']){const link=$('source-'+id);if(id===player)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');const url=new URL(location.href);url.searchParams.delete('dailyView');url.hash='';if(id==='bmz')url.searchParams.set('player','bmz');else url.searchParams.delete('player');link.href=url.href}}
+function markPlayer(player){for(const id of ['lr2','bmz']){const link=$('source-'+id);if(id===player)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');const url=new URL(location.href);url.searchParams.delete('dailyView');url.searchParams.delete('date');url.hash='';if(id==='bmz')url.searchParams.set('player','bmz');else url.searchParams.delete('player');link.href=url.href}}
 function bmzMode(view){const rule={Beatoraja:'beatoraja',Lr2Oraja:'LR2oraja',Dx:'DX'}[view.ruleMode];const ln=view.lnSetting.replace(/^(Auto|Force)(.+)$/,(_,mode,type)=>mode.toUpperCase()+' '+type.toUpperCase());return `${rule} / ${ln}`}
 function validate(x){
  if(!x||x.schemaVersion!==1||!Array.isArray(x.tables)||x.tables.length===0)throw Error('schemaVersion: 1 と、空でない tables 配列が必要です。');
@@ -94,8 +98,11 @@ function selectValue(id,value){if(typeof value==='string'&&[...$(id).options].so
 function restoreView(){const saved=readView();$('query').value='';$('lamp').value='';$('sort').value='level';if(saved&&data.tables.some(t=>t.id===saved.tableId)){$('table').value=saved.tableId;if(typeof saved.query==='string')$('query').value=saved.query;selectValue('lamp',saved.lamp);selectValue('sort',saved.sort);selectTable(saved.level)}else selectTable()}
 function updateView(){render();saveView()}
 function showLampCharts(level,lamp){$('query').value='';selectValue('level',level);selectValue('lamp',String(lamp));updateView();location.hash='charts';$('charts-title').focus({preventScroll:true});$('charts').scrollIntoView({block:'start'})}
-function load(x){
+function load(x,published=false){
  data=validate(x);
+ publishedView=published&&!data.demo&&!!data.history&&['https:','http:'].includes(location.protocol);
+ for(const prefix of ['daily','sheet'])$(prefix+'-share').hidden=!publishedView;
+ clearDailyShare();
  const bmz=data.player==='bmz',palette=lampPalette(data);
  markPlayer(data.demo?requestedPlayer:bmz?'bmz':'lr2');
  document.title=bmz?'My Score · BMZ':'My Score';
@@ -112,13 +119,38 @@ function monthSummary(days,month){const rows=days.filter(d=>d.date.startsWith(mo
 function setupMonth(){const h=data.history,months=h?monthsFor(h.days,data.generatedAt):[];$('month-content').hidden=!months.length;$('month-status').textContent=!h?'プレイログは接続されていません。':!months.length?'確定済みプレイログはありません。':data.player==='bmz'?'同じ判定・LN設定のBMZ単曲プレイを日本時間で集計':'全譜面の確定済みログを日本時間で集計';if(!months.length)return;$('month').replaceChildren(...months.map(m=>option(m,`${m.slice(0,4)}年${Number(m.slice(5))}月`)));selectValue('month',$('day').value.slice(0,7));renderMonth()}
 function renderMonth(){const month=$('month').value;if(!month)return;const days=data.history.days,totals=monthSummary(days,month);$('month-notes').textContent=totals.notes.toLocaleString('ja');$('month-days').textContent=`${totals.playDays} 日`;$('month-plays').textContent=totals.plays.toLocaleString('ja');$('month-time').textContent=data.history.durationAvailable===false?'—':`${Math.floor(totals.seconds/3600)}h ${Math.floor(totals.seconds%3600/60)}m`;$('month-notes-status').textContent=totals.missingDays?`総ノーツ数未取得の ${totals.missingDays} 日は総ノーツ合計から除外`:totals.missingPlays?`総ノーツ数未取得の ${totals.missingPlays} プレイは総ノーツ合計から除外`:'各プレイの譜面全体のノーツ数を合計';$('month-prev').disabled=$('month').selectedIndex===$('month').options.length-1;$('month-next').disabled=$('month').selectedIndex===0;const lookup=new Map(days.map(d=>[d.date,d]));$('calendar').replaceChildren();for(const date of calendarDates(month)){const item=node('li');if(date){const d=lookup.get(date),notes=d?.notes,button=node('button',undefined,`calendar-day${d?.plays>0?' is-played':''}`);button.type='button';const label=`${date.replaceAll('-','/')} ${d?`${d.plays}プレイ・${notes==null?'総ノーツ数未取得':notes.toLocaleString('ja')+'ノーツ'}`:'記録なし'}`;button.setAttribute('aria-label',label);button.title=label;if(date===$('day').value)button.setAttribute('aria-current','date');const amount=node('strong');amount.append(node('span',notes==null?'—':notes.toLocaleString('ja'),'calendar-full'),node('span',notes==null?'—':notes>=100000?`${(notes/10000).toFixed(1)}万`:notes.toLocaleString('ja'),'calendar-compact'));button.append(node('span',String(Number(date.slice(8))),'calendar-date'),amount);button.addEventListener('click',()=>showDay(date));item.append(button)}else item.setAttribute('aria-hidden','true');$('calendar').append(item)}}
 function moveMonth(offset){const index=$('month').selectedIndex+offset;if(index>=0&&index<$('month').options.length){$('month').selectedIndex=index;renderMonth()}}
+function validDailyDate(date){
+ if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
+ const stamp=new Date(date+'T00:00:00Z');
+ return Number.isFinite(stamp.getTime())&&stamp.toISOString().slice(0,10)===date;
+}
+function dailyLink(page,player,date,mode){
+ const url=new URL(page);url.search='';url.hash='daily';
+ url.searchParams.set('player',player==='bmz'?'bmz':'lr2');
+ url.searchParams.set('date',date);
+ if(mode==='all'||mode==='lamps')url.searchParams.set('dailyView',mode);
+ return url.href;
+}
+function clearDailyShare(){
+ shareRevision++;
+ for(const prefix of ['daily','sheet']){$(prefix+'-share-status').textContent='';$(prefix+'-share-url').hidden=true}
+}
+async function copyDailyShare(prefix,mode){
+ const date=$('day').value;if(!publishedView||!validDailyDate(date))return;
+ const url=dailyLink(location.href,data.player,date,mode),status=$(prefix+'-share-status'),input=$(prefix+'-share-url');
+ clearDailyShare();
+ const revision=shareRevision;
+ try{await navigator.clipboard.writeText(url);if(revision===shareRevision)status.textContent='日付付きリンクをコピーしました。'}
+ catch{if(revision!==shareRevision)return;status.textContent='下のURLを選んでコピーしてください。';input.value=url;input.hidden=false;input.focus();input.select()}
+}
 function showDay(date){if(![...$('day').options].some(o=>o.value===date))$('day').replaceChildren(...[...$('day').options,option(date,date)].sort((a,b)=>b.value.localeCompare(a.value)));$('day').value=date;renderHistory();renderMonth();location.hash='daily';$('day-title').focus({preventScroll:true});$('daily').scrollIntoView({block:'start'})}
-function setupHistory(){if($('daily-sheet').open)$('daily-sheet').close();const h=data.history;$('history-content').hidden=!h;$('history-status').textContent=h?(data.player==='bmz'?'同じ判定・LN設定のBMZ単曲プレイ / 取り込み分は集計外':`全譜面の確定済みログ / 未確定 ${h.excludedUnfinalized} 件は集計から除外`):'プレイログは接続されていません。';if(!h){setupMonth();return}const dates=h.days.map(d=>d.date);const today=typeof data.generatedAt==='string'?data.generatedAt.slice(0,10):null;if(today&&/^\d{4}-\d{2}-\d{2}$/.test(today)&&!dates.includes(today)&&(data.player!=='bmz'||!dates.length))dates.push(today);dates.sort().reverse();$('day').replaceChildren(...dates.map(d=>option(d,d)));renderHistory();setupMonth();const mode=new URLSearchParams(location.search).get('dailyView');if(mode==='lamps'||mode==='all')openDailySheet(mode)}
+function setupHistory(){if($('daily-sheet').open)$('daily-sheet').close();const h=data.history;$('history-content').hidden=!h;$('history-status').textContent=h?(data.player==='bmz'?'同じ判定・LN設定のBMZ単曲プレイ / 取り込み分は集計外':`全譜面の確定済みログ / 未確定 ${h.excludedUnfinalized} 件は集計から除外`):'プレイログは接続されていません。';if(!h){setupMonth();return}const dates=h.days.map(d=>d.date);const today=typeof data.generatedAt==='string'?data.generatedAt.slice(0,10):null;if(today&&/^\d{4}-\d{2}-\d{2}$/.test(today)&&!dates.includes(today)&&(data.player!=='bmz'||!dates.length))dates.push(today);const sharedDate=publishedView?new URLSearchParams(location.search).get('date'):null;if(validDailyDate(sharedDate)&&!dates.includes(sharedDate))dates.push(sharedDate);dates.sort().reverse();$('day').replaceChildren(...dates.map(d=>option(d,d)));if(validDailyDate(sharedDate))$('day').value=sharedDate;renderHistory();setupMonth();const mode=new URLSearchParams(location.search).get('dailyView');if(mode==='lamps'||mode==='all')openDailySheet(mode);else if(validDailyDate(sharedDate)&&location.hash==='#daily')requestAnimationFrame(()=>$('daily').scrollIntoView({block:'start'}))}
 function historyTitle(e){const labels=e.tableLabels??(e.level===null?[]:[`sl${e.level}`]);return labels.length?`${labels.join(' / ')} · ${e.title}`:e.title}
 function dailyChanges(entries){const changes=new Map();for(const e of entries){const key=e.chartId;const old=changes.get(key);if(old){for(const field of ['newLamp','newMinBp','newExScore','totalNotes'])old[field]=e[field]}else changes.set(key,{...e})}return [...changes.values()]}
 function reachedAAA(score,notes){return Number.isInteger(score)&&Number.isInteger(notes)&&notes>0&&score*9>=notes*16}
 function updateGroup(label,color,entries,kind){if(!entries.length)return;const palette=lampPalette(data);const section=node('section',undefined,'update-group');section.dataset.kind=kind;section.style.setProperty('--group-color',color);const heading=node('h3',label);heading.append(node('small',`${entries.length} 譜面`));section.append(heading);const list=node('ul');for(const e of entries){const row=node('li',undefined,'update-row');const levels=node('span',(e.tableLabels||[]).join(' / ')||'表外','update-levels');levels.title=levels.textContent;row.append(levels);const change=node('span',undefined,'update-change');let before,after,delta='';if(kind==='lamp'){before=palette[e.oldLamp][0];after=palette[e.newLamp][0]}else if(kind==='aaa'){before=reachedAAA(e.oldExScore,e.oldTotalNotes||e.totalNotes)?'AAA':'—';after='AAA'}else{before=kind==='bp'?e.oldMinBp:e.oldExScore;after=kind==='bp'?e.newMinBp:e.newExScore;const diff=after-before;delta=`(${diff>0?'+':''}${diff.toLocaleString('ja')})`}if(kind==='lamp'){const oldLabel=node('span',before,'lamp-before');oldLabel.style.color=palette[e.oldLamp][1];const newLabel=node('strong',after,'lamp-after');newLabel.style.color=palette[e.newLamp][1];change.append(oldLabel,document.createTextNode(' → '),newLabel)}else change.append(document.createTextNode(`${typeof before==='number'?before.toLocaleString('ja'):before} → `),node('strong',typeof after==='number'?after.toLocaleString('ja'):after));row.append(change,node('span',delta,'update-delta'),titleLink(e.title,e.md5===undefined?e.chartId:e.md5));list.append(row)}section.append(list);$('daily-groups').append(section)}
 function renderHistory(){
+ clearDailyShare();
  const d=data.history.days.find(x=>x.date===$('day').value)||{plays:0,notes:0,notesMissingPlays:0,seconds:0,lampUpdates:0,bpUpdates:0,scoreUpdates:0,entries:[]};
  $('day-title').textContent=`${$('day').value.replaceAll('-','/')} の記録`;$('day-plays').textContent=d.plays.toLocaleString('ja');$('day-notes').textContent=d.notes===undefined?'—':d.notes.toLocaleString('ja');$('day-notes-status').textContent=d.notes===undefined?'総ノーツ数を表示するには閲覧用JSONを更新してください。':d.notesMissingPlays?`総ノーツ数が未取得の ${d.notesMissingPlays} プレイは合計から除外`:'各プレイの譜面全体のノーツ数を合計';$('day-time').textContent=data.history.durationAvailable===false?'—':`${Math.floor(d.seconds/3600)}h ${Math.floor(d.seconds%3600/60)}m`;$('day-updates').textContent=`${d.lampUpdates} / ${d.bpUpdates}`;$('day-score-updates').textContent=d.scoreUpdates===undefined?'—':d.scoreUpdates.toLocaleString('ja');
  $('daily-groups').replaceChildren();
@@ -177,10 +209,12 @@ function refreshPublishedPage(){const url=new URL(location.href);url.searchParam
 ['app-refresh','daily-refresh'].forEach(id=>$(id).addEventListener('click',refreshPublishedPage));
 $('daily-fit').addEventListener('click',()=>openDailySheet('all'));
 $('daily-fit-lamps').addEventListener('click',()=>openDailySheet('lamps'));
-$('sheet-filter').addEventListener('change',fitDailySheet);
+$('daily-share').addEventListener('click',()=>copyDailyShare('daily'));
+$('sheet-share').addEventListener('click',()=>copyDailyShare('sheet',$('sheet-filter').value));
+$('sheet-filter').addEventListener('change',()=>{clearDailyShare();fitDailySheet()});
 $('sheet-save').addEventListener('click',saveSheetImage);
 $('sheet-close').addEventListener('click',()=>$('daily-sheet').close());
-$('daily-sheet').addEventListener('close',()=>{if(!$('daily-sheet').open){document.body.classList.remove('sheet-open');clearSheetImage()}});
+$('daily-sheet').addEventListener('close',()=>{if(!$('daily-sheet').open){document.body.classList.remove('sheet-open');clearDailyShare();clearSheetImage()}});
 $('sheet-day').addEventListener('change',()=>{$('day').value=$('sheet-day').value;renderHistory();selectValue('month',$('day').value.slice(0,7));renderMonth()});
 window.addEventListener('resize',scheduleDailySheet);
 if(typeof ResizeObserver==='function')new ResizeObserver(scheduleDailySheet).observe($('sheet-viewport'));
@@ -211,20 +245,22 @@ $('day').addEventListener('change',()=>{renderHistory();selectValue('month',$('d
 $('month').addEventListener('change',renderMonth);$('month-prev').addEventListener('click',()=>moveMonth(1));$('month-next').addEventListener('click',()=>moveMonth(-1));
 $('file').addEventListener('change',async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>25*1024*1024)throw Error('JSONは25MB以下にしてください。');load(JSON.parse(await file.text()));manualDataSelected=true}catch(err){$('error').textContent=`読み込みエラー: ${err.message}`;$('error').hidden=false}finally{e.target.value=''}});
 markPlayer(requestedPlayer);
-if(requestedPlayer==='bmz'){
+const pageQuery=new URLSearchParams(location.search),waitForPublished=requestedPlayer==='bmz'||pageQuery.has('date');
+const requestedLabel=requestedPlayer==='bmz'?'BMZ':'LR2';
+if(waitForPublished){
  $('viewer-content').hidden=true;
- $('status').textContent='BMZの公開データを読み込んでいます…';
- if(location.protocol==='file:')$('status').textContent='「閲覧用JSONを開く」からBMZのデータを選んでください。';
+ $('status').textContent=requestedLabel+'の公開データを読み込んでいます…';
+ if(location.protocol==='file:')$('status').textContent='「閲覧用JSONを開く」からデータを選んでください。';
 }else load(sample());
 // GitHub Pagesでは同じサイトに置いた閲覧用データを取得します。
 // データ未配置時は、明示したデモ表示を維持します。
 if(location.protocol==='https:'||location.protocol==='http:'){
  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),10000);
  fetch(requestedPlayer==='bmz'?'./data/bmz.json':'./data/viewer.json',{cache:'no-store',signal:controller.signal}).then(async response=>{
-  if(response.status===404){if(!manualDataSelected&&requestedPlayer==='bmz')$('status').textContent='BMZの公開データはまだありません。閲覧用JSONを開くこともできます。';return;}
+  if(response.status===404){if(!manualDataSelected&&waitForPublished)$('status').textContent=requestedLabel+'の公開データはまだありません。閲覧用JSONを開くこともできます。';return;}
   if(!response.ok)throw Error(`公開データの取得に失敗しました (${response.status})`);
-  const published=await response.json();if(!manualDataSelected)load(published);
- }).catch(err=>{if(manualDataSelected)return;if(requestedPlayer==='bmz')$('status').textContent='BMZの公開データを読み込めませんでした。';$('error').textContent=`公開データを表示できません: ${err.message}`;$('error').hidden=false}).finally(()=>clearTimeout(timeout));
+  const published=await response.json();if(!manualDataSelected)load(published,true);
+ }).catch(err=>{if(manualDataSelected)return;if(waitForPublished)$('status').textContent=requestedLabel+'の公開データを読み込めませんでした。';$('error').textContent=`公開データを表示できません: ${err.message}`;$('error').hidden=false}).finally(()=>clearTimeout(timeout));
 }
 </script>
 </html>
