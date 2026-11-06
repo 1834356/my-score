@@ -28,7 +28,7 @@ try {
             throw 'originの送信先を自分のGitHubリポジトリ1件に設定してください。'
         }
         $target = $Matches[1]
-        if ($target -in @('1834356/bms-score-viewer','1834356/lr2-score-viewer')) {
+        if ($target -in @('1834356/bms-play-journal','1834356/bms-score-viewer','1834356/lr2-score-viewer')) {
             throw '配布元にはスコアを送信できません。originを自分のフォークまたはテンプレートから作ったリポジトリに変更してください。'
         }
         Write-Host "公開先: https://github.com/$target (main)"
